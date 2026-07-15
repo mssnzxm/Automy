@@ -530,6 +530,8 @@ graph LR
 
 <p>在智能体框架选型上,Automy 团队重点考察了 DeerFlow 2、OpenHarness 以及 Eino ADK 三种方案,并结合 LangChain 生态与 Langfuse 可观测性进行综合评估。</p>
 
+<p class="text-danger" style="font-weight: 600;">⚠ 范例仅演示用,并不代表最终选型,技术决策未充分讨论</p>
+
 <h3>1. 框架对比</h3>
 
 <table class="table">
@@ -542,9 +544,9 @@ graph LR
     <tr><td><strong>多 Agent 协同</strong></td><td>支持(任务分发)</td><td>需自行实现</td><td>原生支持(Graph 节点)</td></tr>
     <tr><td><strong>流式输出</strong></td><td>支持</td><td>取决于实现</td><td>原生 SSE / 流式 Token</td></tr>
     <tr><td><strong>工具调用</strong></td><td>Function Calling</td><td>抽象接口</td><td>Function Calling + MCP 原生</td></tr>
-    <tr><td><strong>生态成熟度</strong></td><td>研究性强,生态小</td><td>概念抽象,实现分散</td><td>CloudWeGo 生产验证,字节内部规模化</td></tr>
+    <tr><td><strong>生态成熟度</strong></td><td>研究性强,LangChain 生态兼容好</td><td>概念抽象,实现分散</td><td>CloudWeGo 生产验证,字节内部规模化</td></tr>
     <tr><td><strong>性能</strong></td><td>Python,中等</td><td>取决于实现</td><td>Go 原生,高性能</td></tr>
-    <tr><td><strong>可观测</strong></td><td>弱</td><td>需自建</td><td>原生 OpenTelemetry</td></tr>
+    <tr><td><strong>可观测</strong></td><td>好(默认集成 Langfuse/LangSmith)</td><td>需自建</td><td>原生 OpenTelemetry</td></tr>
     <tr><td><strong>适用场景</strong></td><td>研究实验 / 复杂任务流</td><td>需要自定义 Harness 的团队</td><td>企业级生产场景</td></tr>
   </tbody>
 </table>
