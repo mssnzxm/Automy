@@ -1,8 +1,0 @@
-# Cloudflare Pages 配置
-# 通过 wrangler 部署: npx wrangler pages deploy dist
-
-name = "automy-site"
-compatibility_date = "2025-09-01"
-pages_build_output_dir = "dist"
-
-# 部署命令: npm run build && npx wrangler pages deploy dist
