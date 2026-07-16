@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>计费账单 · Automy</title>
+</head>
+<body>
+<div class="prototype-frame">
+  <div class="app-frame">
+    <!-- 应用侧边栏 -->
+    <aside class="app-frame__sidebar">
+      <div class="app-sidebar__header">
+        <span class="app-sidebar__brand">Automy</span>
+        <button class="app-sidebar__new" title="新建会话">+</button>
+      </div>
+      <nav class="app-sidebar__nav">
+        <div class="app-sidebar__section-label">主导航</div>
+        <a href="#/prototype/workspace" class="app-nav-item"><span class="app-nav-item__icon">💼</span><span class="app-nav-item__label">工作台</span></a>
+        <a href="#/prototype/skill-market" class="app-nav-item"><span class="app-nav-item__icon">⚡</span><span class="app-nav-item__label">技能市场</span></a>
+        <a href="#/prototype/expert-market" class="app-nav-item"><span class="app-nav-item__icon">🤖</span><span class="app-nav-item__label">专家市场</span></a>
+        <a href="#/prototype/mcp" class="app-nav-item"><span class="app-nav-item__icon">🔌</span><span class="app-nav-item__label">MCP 集成</span></a>
+        <a href="#/prototype/knowledge" class="app-nav-item"><span class="app-nav-item__icon">📚</span><span class="app-nav-item__label">知识库</span></a>
+        <a href="#/prototype/admin" class="app-nav-item active"><span class="app-nav-item__icon">⚙</span><span class="app-nav-item__label">管理后台</span></a>
+        <a href="#/prototype/workbuddy-demo" class="app-nav-item"><span class="app-nav-item__icon">🖼</span><span class="app-nav-item__label">WorkBuddy 交互界面</span></a>
+
+        <div class="app-sidebar__section-label" style="margin-top: 20px;">管理</div>
+        <a href="#/prototype/admin" class="app-nav-item"><span class="app-nav-item__icon">📊</span><span class="app-nav-item__label">仪表盘</span></a>
+        <a href="#/prototype/admin/users" class="app-nav-item"><span class="app-nav-item__icon">👥</span><span class="app-nav-item__label">用户管理</span></a>
+        <a href="#/prototype/admin/roles" class="app-nav-item"><span class="app-nav-item__icon">🔑</span><span class="app-nav-item__label">角色权限</span></a>
+        <a href="#/prototype/admin/models" class="app-nav-item"><span class="app-nav-item__icon">🤖</span><span class="app-nav-item__label">模型网关</span></a>
+        <a href="#/prototype/admin/mcp-services" class="app-nav-item"><span class="app-nav-item__icon">🔌</span><span class="app-nav-item__label">MCP 服务</span></a>
+        <a href="#/prototype/admin/skills-experts" class="app-nav-item"><span class="app-nav-item__icon">📦</span><span class="app-nav-item__label">技能与专家</span></a>
+        <a href="#/prototype/admin/audit" class="app-nav-item"><span class="app-nav-item__icon">📜</span><span class="app-nav-item__label">审计日志</span></a>
+        <a href="#/prototype/admin/billing" class="app-nav-item active"><span class="app-nav-item__icon">💰</span><span class="app-nav-item__label">计费账单</span></a>
+        <a href="#/prototype/admin/security" class="app-nav-item"><span class="app-nav-item__icon">🔐</span><span class="app-nav-item__label">安全策略</span></a>
+        <a href="#/prototype/admin/market-review" class="app-nav-item"><span class="app-nav-item__icon">🛡</span><span class="app-nav-item__label">市场审核</span></a>
+        <a href="#/prototype/admin/settings" class="app-nav-item"><span class="app-nav-item__icon">⚙</span><span class="app-nav-item__label">系统配置</span></a>
+      </nav>
+      <div class="app-sidebar__footer">
+        <a href="#/prototype/profile" class="app-nav-item">
+          <div class="avatar avatar-sm">钱</div>
+          <span class="app-nav-item__label">钱七 · 管理员</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="app-frame__main">
+      <div class="app-topbar">
+        <div class="app-topbar__title">计费账单</div>
+        <div class="app-topbar__actions">
+          <button class="btn btn-ghost btn-sm">📤 导出账单</button>
+          <button class="btn btn-primary btn-sm">⚙ 调整套餐</button>
+        </div>
+      </div>
+      <div style="padding: 24px; overflow-y: auto; flex: 1;">
+        <ul class="breadcrumb">
+          <li><a href="#/">首页</a></li>
+          <li><a href="#/prototype/workspace">产品原型</a></li>
+          <li><a href="#/prototype/admin">管理后台</a></li>
+          <li>计费账单</li>
+        </ul>
+
+        <!-- 费用概览 -->
+        <div class="stat-grid" style="margin-bottom: 16px;">
+          <div class="stat-card">
+            <div class="stat-card__label">本月费用</div>
+            <div class="stat-card__value">¥48,260</div>
+            <div class="stat-card__trend stat-card__trend--up">▲ +12%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">人均月费</div>
+            <div class="stat-card__value">¥147.7</div>
+            <div class="stat-card__trend stat-card__trend--up">▲ +¥8.2</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">Token 消耗</div>
+            <div class="stat-card__value">28.6<span class="text-sm text-tertiary"> M</span></div>
+            <div class="stat-card__trend stat-card__trend--up">▲ +6%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__label">预算使用率</div>
+            <div class="stat-card__value" style="color: var(--color-warning);">60.3<span class="text-sm text-tertiary">%</span></div>
+            <div class="stat-card__trend stat-card__trend--up">¥48,260 / ¥80,000</div>
+          </div>
+        </div>
+
+        <!-- 套餐分布 -->
+        <div class="grid grid-cols-3" style="gap: 16px; margin-bottom: 16px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Basic</div>
+              <span class="badge badge-secondary">入门版</span>
+            </div>
+            <div class="card-body">
+              <div class="flex items-baseline gap-2" style="margin-bottom: 12px;">
+                <span class="font-bold" style="font-size: 24px;">¥29</span>
+                <span class="text-xs text-tertiary">/月 /人</span>
+              </div>
+              <div class="flex justify-between" style="padding: 6px 0;">
+                <span class="text-sm text-secondary">用户数</span>
+                <span class="text-sm font-medium">32 人</span>
+              </div>
+              <div class="flex justify-between" style="padding: 6px 0;">
+                <span class="text-sm text-secondary">月费小计</span>
+                <span class="text-sm font-medium">¥928</span>
+              </div>
+              <div class="progress" style="margin-top: 8px;"><div class="progress__bar" style="width: 28%;"></div></div>
+              <div class="text-xs text-tertiary" style="margin-top: 4px;">占总费用 1.9%</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Pro</div>
+              <span class="badge badge-primary">专业版</span>
+            </div>
+            <div class="card-body">
+              <div class="flex items-baseline gap-2" style="margin-bottom: 12px;">
+                <span class="font-bold" style="font-size: 24px;">¥99</span>
+                <span class="text-xs text-tertiary">/月 /人</span>
+              </div>
+              <div class="flex justify-between" style="padding: 6px 0;">
+                <span class="text-sm text-secondary">用户数</span>
+                <span class="text-sm font-medium">45 人</span>
+              </div>
+              <div class="flex justify-between" style="padding: 6px 0;">
+                <span class="text-sm text-secondary">月费小计</span>
+                <span class="text-sm font-medium">¥4,455</span>
+              </div>
+              <div class="progress" style="margin-top: 8px;"><div class="progress__bar" style="width: 56%;"></div></div>
+              <div class="text-xs text-tertiary" style="margin-top: 4px;">占总费用 9.2%</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Enterprise</div>
+              <span class="badge badge-warning">企业版</span>
+            </div>
+            <div class="card-body">
+              <div class="flex items-baseline gap-2" style="margin-bottom: 12px;">
+                <span class="font-bold" style="font-size: 24px;">¥299</span>
+                <span class="text-xs text-tertiary">/月 /人</span>
+              </div>
+              <div class="flex justify-between" style="padding: 6px 0;">
+                <span class="text-sm text-secondary">用户数</span>
+                <span class="text-sm font-medium">18 人</span>
+              </div>
+              <div class="flex justify-between" style="padding: 6px 0;">
+                <span class="text-sm text-secondary">月费小计</span>
+                <span class="text-sm font-medium">¥5,382</span>
+              </div>
+              <div class="progress" style="margin-top: 8px;"><div class="progress__bar" style="width: 67%; background: var(--color-warning);"></div></div>
+              <div class="text-xs text-tertiary" style="margin-top: 4px;">占总费用 11.2%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 部门成本分摊 -->
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="card-header">
+            <div class="card-title">部门成本分摊</div>
+            <span class="text-xs text-tertiary">基于 Token 消耗与席位</span>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <table class="table">
+              <thead><tr><th>部门</th><th>人数</th><th>Token 消耗</th><th>月费用 (¥)</th><th style="min-width: 180px;">占比</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="text-sm font-medium">投研部</td>
+                  <td class="text-sm">128</td>
+                  <td class="text-sm">12.4 M</td>
+                  <td class="text-sm font-medium">¥18,940</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="progress" style="flex: 1; margin: 0;"><div class="progress__bar" style="width: 39.2%;"></div></div>
+                      <span class="text-xs text-tertiary" style="min-width: 42px;">39.2%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-sm font-medium">法务部</td>
+                  <td class="text-sm">56</td>
+                  <td class="text-sm">5.2 M</td>
+                  <td class="text-sm font-medium">¥8,260</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="progress" style="flex: 1; margin: 0;"><div class="progress__bar" style="width: 17.1%;"></div></div>
+                      <span class="text-xs text-tertiary" style="min-width: 42px;">17.1%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-sm font-medium">销售部</td>
+                  <td class="text-sm">68</td>
+                  <td class="text-sm">4.6 M</td>
+                  <td class="text-sm font-medium">¥7,120</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="progress" style="flex: 1; margin: 0;"><div class="progress__bar" style="width: 14.8%;"></div></div>
+                      <span class="text-xs text-tertiary" style="min-width: 42px;">14.8%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-sm font-medium">IT 部</td>
+                  <td class="text-sm">33</td>
+                  <td class="text-sm">2.6 M</td>
+                  <td class="text-sm font-medium">¥7,760</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="progress" style="flex: 1; margin: 0;"><div class="progress__bar" style="width: 16.1%;"></div></div>
+                      <span class="text-xs text-tertiary" style="min-width: 42px;">16.1%</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-sm font-medium">合规部</td>
+                  <td class="text-sm">42</td>
+                  <td class="text-sm">3.8 M</td>
+                  <td class="text-sm font-medium">¥6,180</td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <div class="progress" style="flex: 1; margin: 0;"><div class="progress__bar" style="width: 12.8%; background: var(--color-warning);"></div></div>
+                      <span class="text-xs text-tertiary" style="min-width: 42px;">12.8%</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 近 6 月费用趋势 -->
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="card-header"><div class="card-title">近 6 月费用趋势 (¥)</div></div>
+          <div class="card-body">
+            <div class="flex" style="gap: 8px; align-items: flex-end; height: 180px; padding-top: 12px;">
+              <div style="flex: 1; text-align: center;"><div style="height: 80%; background: var(--color-primary); border-radius: 4px 4px 0 0; margin-bottom: 6px;"></div><div class="text-xs text-tertiary">2026/02</div><div class="text-xs">¥38,500</div></div>
+              <div style="flex: 1; text-align: center;"><div style="height: 85%; background: var(--color-primary); border-radius: 4px 4px 0 0; margin-bottom: 6px;"></div><div class="text-xs text-tertiary">2026/03</div><div class="text-xs">¥41,200</div></div>
+              <div style="flex: 1; text-align: center;"><div style="height: 82%; background: var(--color-primary); border-radius: 4px 4px 0 0; margin-bottom: 6px;"></div><div class="text-xs text-tertiary">2026/04</div><div class="text-xs">¥39,800</div></div>
+              <div style="flex: 1; text-align: center;"><div style="height: 88%; background: var(--color-primary); border-radius: 4px 4px 0 0; margin-bottom: 6px;"></div><div class="text-xs text-tertiary">2026/05</div><div class="text-xs">¥42,600</div></div>
+              <div style="flex: 1; text-align: center;"><div style="height: 93%; background: var(--color-primary); border-radius: 4px 4px 0 0; margin-bottom: 6px;"></div><div class="text-xs text-tertiary">2026/06</div><div class="text-xs">¥45,100</div></div>
+              <div style="flex: 1; text-align: center;"><div style="height: 100%; background: var(--color-warning); border-radius: 4px 4px 0 0; margin-bottom: 6px;"></div><div class="text-xs text-tertiary">2026/07</div><div class="text-xs font-medium">¥48,260</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 账单记录 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">账单记录</div>
+            <button class="btn btn-ghost btn-sm">查看全部</button>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <table class="table">
+              <thead><tr><th>账单编号</th><th>账期</th><th>费用明细摘要</th><th>金额 (¥)</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code class="text-sm">INV-202607</code></td>
+                  <td class="text-sm">2026-07-01 ~ 2026-07-31</td>
+                  <td class="text-sm">席位 ¥10,765 + Token 超额 ¥37,495</td>
+                  <td class="text-sm font-medium">¥48,260</td>
+                  <td><span class="badge badge-warning">待支付</span></td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button class="btn btn-ghost btn-sm">查看</button>
+                      <button class="btn btn-ghost btn-sm">下载</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code class="text-sm">INV-202606</code></td>
+                  <td class="text-sm">2026-06-01 ~ 2026-06-30</td>
+                  <td class="text-sm">席位 ¥10,765 + Token 超额 ¥34,335</td>
+                  <td class="text-sm font-medium">¥45,100</td>
+                  <td><span class="badge badge-success">已支付</span></td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button class="btn btn-ghost btn-sm">查看</button>
+                      <button class="btn btn-ghost btn-sm">下载</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code class="text-sm">INV-202605</code></td>
+                  <td class="text-sm">2026-05-01 ~ 2026-05-31</td>
+                  <td class="text-sm">席位 ¥10,765 + Token 超额 ¥31,835</td>
+                  <td class="text-sm font-medium">¥42,600</td>
+                  <td><span class="badge badge-success">已支付</span></td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button class="btn btn-ghost btn-sm">查看</button>
+                      <button class="btn btn-ghost btn-sm">下载</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code class="text-sm">INV-202604</code></td>
+                  <td class="text-sm">2026-04-01 ~ 2026-04-30</td>
+                  <td class="text-sm">席位 ¥10,765 + Token 超额 ¥29,035</td>
+                  <td class="text-sm font-medium">¥39,800</td>
+                  <td><span class="badge badge-success">已支付</span></td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button class="btn btn-ghost btn-sm">查看</button>
+                      <button class="btn btn-ghost btn-sm">下载</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code class="text-sm">INV-202603</code></td>
+                  <td class="text-sm">2026-03-01 ~ 2026-03-31</td>
+                  <td class="text-sm">席位 ¥10,765 + Token 超额 ¥30,435</td>
+                  <td class="text-sm font-medium">¥41,200</td>
+                  <td><span class="badge badge-danger">已逾期</span></td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button class="btn btn-ghost btn-sm">查看</button>
+                      <button class="btn btn-ghost btn-sm">下载</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code class="text-sm">INV-202602</code></td>
+                  <td class="text-sm">2026-02-01 ~ 2026-02-28</td>
+                  <td class="text-sm">席位 ¥10,765 + Token 超额 ¥27,735</td>
+                  <td class="text-sm font-medium">¥38,500</td>
+                  <td><span class="badge badge-success">已支付</span></td>
+                  <td>
+                    <div class="flex gap-2">
+                      <button class="btn btn-ghost btn-sm">查看</button>
+                      <button class="btn btn-ghost btn-sm">下载</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>
