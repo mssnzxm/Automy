@@ -220,7 +220,7 @@ const app = {
       { id: 'architecture-goals', name: '架构目标', icon: '🎯' },
       { id: 'overview', name: '架构总览', icon: '🏛' },
       { id: 'system-design', name: '系统设计与分层', icon: '🏗' },
-      { id: 'agent-runtime', name: '智能体运行时 (Eino ADK)', icon: '⚙' },
+      { id: 'agent-runtime', name: '智能体运行时 (AgentScope Java 2.0)', icon: '⚙' },
       { id: 'memory-system', name: '记忆系统设计', icon: '🧠' },
       { id: 'skill-system', name: '技能系统设计', icon: '⚡' },
       { id: 'mcp-protocol', name: 'MCP 协议与接入', icon: '🔌' },

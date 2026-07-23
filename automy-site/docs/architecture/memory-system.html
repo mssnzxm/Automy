@@ -65,7 +65,7 @@ graph TB
         L3 --> L_PG
         L3 --> L_VEC
     end
-    Agent["Eino ADK Agent"] -->|读写| S1
+    Agent["AgentScope ReActAgent"] -->|读写| S1
     Agent -->|读写| S2
     Agent -->|读写| S3
     Agent -->|读写| W1
@@ -137,6 +137,53 @@ graph TB
 <span class="token-keyword">CREATE INDEX</span> idx_memories_scope <span class="token-keyword">ON</span> memories(scope, scope_id);
 <span class="token-keyword">CREATE INDEX</span> idx_memories_tags <span class="token-keyword">ON</span> memories <span class="token-keyword">USING</span> GIN(tags);
 <span class="token-keyword">CREATE INDEX</span> idx_memories_type <span class="token-keyword">ON</span> memories(user_id, type, is_deleted);</code></pre>
+</div>
+
+<h3>与 AgentScope Harness 记忆体系的映射</h3>
+
+<p>Automy 记忆系统在底层基于 <strong>AgentScope Harness</strong> 的记忆抽象实现。HarnessAgent 通过 <strong>Hook 机制</strong>注入记忆管理(不修改核心推理逻辑),以 <code>MEMORY.md</code>(自动管理)+ <strong>Redis Session</strong>(跨副本恢复)+ 自动合并/压缩(防上下文膨胀)为核心。短期记忆承载于会话级 Redis Session,长期记忆落地 <code>MEMORY.md</code> + 向量库 RAG(<code>knowledge/</code> 目录)。Automy 三层记忆(事实 Fact / 偏好 Preference / 事件 Episode)与 AgentScope Harness 记忆体系的映射关系如下:</p>
+
+<div class="card">
+  <div class="card-body">
+    <table class="table">
+      <thead><tr><th>Automy 记忆类型</th><th>AgentScope Harness 载体</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>事实记忆 Fact</strong></td>
+          <td><code>MEMORY.md</code> 结构化条目 + 向量库</td>
+          <td>客观可验证信息写入 <code>MEMORY.md</code> 结构化区段,同时向量化进入 <code>knowledge/</code> RAG 索引,支持语义检索与引用</td>
+        </tr>
+        <tr>
+          <td><strong>偏好记忆 Preference</strong></td>
+          <td><code>MEMORY.md</code> 用户偏好段 + 自动注入 system prompt</td>
+          <td>用户主观偏好由 HarnessAgent Hook 在会话启动时自动注入 system prompt,无需推理层主动检索</td>
+        </tr>
+        <tr>
+          <td><strong>事件记忆 Episode</strong></td>
+          <td>Redis Session 会话历史 + <code>MEMORY.md</code> 事件摘要</td>
+          <td>近期事件保留在 Redis Session 会话历史中,关键事件由 Hook 提取摘要写入 <code>MEMORY.md</code> 长期保存</td>
+        </tr>
+        <tr>
+          <td><strong>跨会话恢复</strong></td>
+          <td>Redis Session 快照 + Workspace 恢复</td>
+          <td>HarnessAgent 通过 Redis Session + Workspace 快照恢复完整上下文(对话历史、计划、待办、权限),支撑零停机滚动发布</td>
+        </tr>
+        <tr>
+          <td><strong>自动压缩</strong></td>
+          <td>HarnessAgent Hook 自动合并旧记忆</td>
+          <td>当 <code>MEMORY.md</code> 超过阈值时,Hook 自动合并/压缩旧记忆条目,防止上下文膨胀,对齐 Automy 遗忘机制</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <div class="alert__icon">🔐</div>
+  <div class="alert__body">
+    <div class="alert__title">多租户隔离对齐</div>
+    <div class="alert__desc">AgentScope Harness 的 <code>userId</code>/<code>sessionId</code> 贯穿 workspace 命名空间、Redis Session Key、KV 存储,与 Automy 记忆权限隔离(用户只能检索自己的 user 级记忆)天然对齐,无需额外适配。</div>
+  </div>
 </div>
 
 <h2>三、记忆写入流水线</h2>

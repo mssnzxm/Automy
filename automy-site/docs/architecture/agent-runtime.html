@@ -2,265 +2,289 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>智能体运行时(Eino ADK) · 技术架构 · Automy</title>
+  <title>智能体运行时(AgentScope Java 2.0) · 技术架构 · Automy</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 </head>
 <body>
 <nav class="breadcrumb">
   <li><a href="#/">首页</a></li>
   <li><a href="#/docs/architecture/overview">技术架构</a></li>
-  <li>智能体运行时(Eino ADK)</li>
+  <li>智能体运行时(AgentScope Java 2.0)</li>
 </nav>
 
-<h1>智能体运行时(Eino ADK 专题)</h1>
+<h1>智能体运行时(AgentScope Java 2.0 专题)</h1>
 
 <p class="text-secondary">
-  智能体运行时是 Automy 的核心引擎,基于字节跳动开源的 <strong>Eino ADK</strong>(Agent Development Kit)构建。
-  本章节系统性地介绍 Eino ADK 的设计哲学、核心组件、在 Automy 中的落地实践、与技能/专家层的关系、
+  智能体运行时是 Automy 的核心引擎,基于阿里达摩院开源的 <strong>AgentScope Java 2.0</strong>(Apache-2.0,JDK 17+,基于 Project Reactor 的响应式企业级 Agent 框架)构建。
+  本章节系统性地介绍 AgentScope 的设计哲学、核心组件、在 Automy 中的落地实践、与技能/专家层的关系、
   模型网关对接、选型对比、局限对策,以及基于 OpenTelemetry 的执行追踪设计。这是技术架构中最核心的章节。
 </p>
 
 <div class="alert alert-info">
   <div class="alert__icon">⚡</div>
   <div class="alert__body">
-    <div class="alert__title">Eino ADK 一句话定义</div>
-    <div class="alert__desc">字节跳动开源的 Go 原生 LLM 应用框架,组件化拼装 + 声明式 Chain/Graph 编排,企业级高性能智能体开发首选。</div>
+    <div class="alert__title">AgentScope Java 2.0 一句话定义</div>
+    <div class="alert__desc">阿里达摩院开源的 Java 原生企业级 Agent 框架,ReActAgent 推理内核 + Harness 工程化底座 + Multi-Agent Supervisor 编排,MCP/A2A 原生,响应式高并发,与 Spring Boot 无缝融合。</div>
   </div>
 </div>
 
-<h2>一、Eino ADK 简介</h2>
+<h2>一、AgentScope Java 2.0 简介</h2>
 
-<p>Eino(Elastic AI Orchestration)是字节跳动于 2024 年开源的 Go 语言 LLM 应用开发框架,定位对标 LangChain/LangGraph,但专为生产级企业场景设计。其 ADK(Agent Development Kit)层提供完整的 Agent 编排能力。</p>
+<p>AgentScope Java 2.0 是阿里达摩院于 <strong>2026-07</strong> 正式 GA(Apache-2.0,v2.0.0)的企业级 Agent 框架,定位对标 LangGraph 等主流框架,但专为 Java 技术栈与生产级企业场景设计。其核心思想是「<strong>模型主导,框架退后</strong>」(model-led over fixed pipeline):当 LLM 推理足够强时,框架应退后让模型自主决策,而非用刚性 pipeline 约束 Agent 行为。</p>
+
+<p>AgentScope Java 2.0 运行于 <strong>JDK 17+</strong>,发布到 Maven Central,基于 <strong>Project Reactor</strong> 响应式流(非阻塞高并发),原生嵌入 Spring Boot 微服务体系。它将「推理内核」与「工程化底座」分层解耦:轻量场景用 <code>ReActAgent</code>,企业级长任务用 <code>HarnessAgent</code> 增强工作空间/会话/沙箱/可恢复能力。</p>
 
 <h3>核心特性</h3>
 <div class="grid grid-cols-3">
   <div class="card"><div class="card-body">
-    <h4>🧩 组件化拼装</h4>
-    <p class="text-sm text-secondary">ChatModel / Tool / Memory / Retriever / Loader 等标准化接口,组件可独立实现与替换,生态兼容性强。</p>
+    <h4>🧠 模型主导</h4>
+    <p class="text-sm text-secondary">ReActAgent 推理内核轻量,让 LLM 自主规划工具调用,框架不约束固定 pipeline,适配推理模型快速演进。</p>
   </div></div>
   <div class="card"><div class="card-body">
-    <h4>🔀 声明式编排</h4>
-    <p class="text-sm text-secondary">通过 Chain(线性)与 Graph(DAG)两种编排原语,声明式描述工作流,支持分支、并行、循环、条件跳转。</p>
+    <h4>🏗 Harness 工程化</h4>
+    <p class="text-sm text-secondary">HarnessAgent 在 ReActAgent 之上增加 Workspace/Session/Memory/Sandbox/Skill/Subagent,企业级有状态可恢复。</p>
   </div></div>
   <div class="card"><div class="card-body">
-    <h4>🚀 高性能</h4>
-    <p class="text-sm text-secondary">Go 原生实现,Goroutine 并发模型,流式处理贯穿全链路。无 GIL 限制,单实例支撑高并发。</p>
+    <h4>🚀 响应式高并发</h4>
+    <p class="text-sm text-secondary">基于 Project Reactor 响应式流,非阻塞 IO,单实例支撑高并发 Agent 调度与流式输出。</p>
   </div></div>
   <div class="card"><div class="card-body">
-    <h4>🔗 流式优先</h4>
-    <p class="text-sm text-secondary">所有组件接口默认支持流式输入输出(Stream API),LLM Token 可端到端流式回传。</p>
+    <h4>🔗 MCP + A2A 原生</h4>
+    <p class="text-sm text-secondary">原生支持 MCP(Model Context Protocol)与 A2A(Agent-to-Agent),可注册到 Nacos 跨进程跨机调用。</p>
   </div></div>
   <div class="card"><div class="card-body">
-    <h4>🛡 类型安全</h4>
-    <p class="text-sm text-secondary">基于 Go 泛型与接口契约,编译期类型检查,避免运行时错误。</p>
+    <h4>🌱 Spring 生态融合</h4>
+    <p class="text-sm text-secondary">原生嵌入 Spring Boot + Spring Cloud + Nacos,与团队既有 Java 微服务体系无缝对接。</p>
   </div></div>
   <div class="card"><div class="card-body">
-    <h4>📊 可观测内置</h4>
-    <p class="text-sm text-secondary">原生集成 OpenTelemetry,每一步 Graph 节点自动生成 Span,无需侵入式埋点。</p>
+    <h4>📊 OpenTelemetry 内置</h4>
+    <p class="text-sm text-secondary">每一步 Reasoning step / Tool call 自动生成 Span,对接 LangFuse / 阿里云 ARMS,无需自接。</p>
   </div></div>
 </div>
 
 <h3>开源生态</h3>
 <ul>
-  <li><strong>官方仓库</strong>:github.com/cloudwego/eino(主体框架)、github.com/cloudwego/eino-ext(扩展组件)</li>
-  <li><strong>维护方</strong>:字节跳动 CloudWeGo 团队(同 Hertz / Kitex 框架)</li>
-  <li><strong>生态组件</strong>:OpenAI / Claude / 通义千问 / DeepSeek / Ollama 等模型适配;Elasticsearch / Milvus / Volc VesDB 等检索后端</li>
+  <li><strong>官方仓库</strong>:github.com/agentscope-ai/agentscope-java</li>
+  <li><strong>官方文档</strong>:java.agentscope.io</li>
+  <li><strong>维护方</strong>:阿里达摩院 AgentScope 团队</li>
+  <li><strong>配套生态</strong>:Nacos(服务/Skill/MCP 市场管理)、Higress(AI 网关,模型代理 + MCP 代理)、QwenPaw、AgentTeams</li>
   <li><strong>许可证</strong>:Apache-2.0,商用友好</li>
 </ul>
 
-<h2>二、ADK 核心组件</h2>
+<h2>二、AgentScope 核心组件</h2>
 
-<p>Eino ADK 通过一组标准化接口抽象 LLM 应用的核心能力,Automy 在此基础上实现具体组件对接企业系统。</p>
+<p>AgentScope Java 2.0 由「编排层」「工程化层」「系统层」「协议层」组成,Automy 在此基础上实现适配层对接企业系统。</p>
 
 <div class="card">
   <div class="card-header">
-    <span class="card-title">Eino ADK 核心组件全景</span>
+    <span class="card-title">AgentScope Java 2.0 核心组件全景</span>
     <span class="badge badge-primary">Mermaid</span>
   </div>
   <div class="card-body">
     <div class="mermaid">
 graph TB
-    subgraph "编排层 Orchestration"
-        CHAIN["Chain<br/>线性编排"]
-        GRAPH["Graph<br/>DAG 图编排"]
-        AGENT["Agent<br/>自治智能体"]
+    subgraph ORC ["编排层 Orchestration"]
+        REACT["ReActAgent\n推理内核"]
+        HARNESS["HarnessAgent\n企业级有状态"]
+        SUP["Supervisor\n多 Agent 编排"]
     end
-    subgraph "组件层 Components"
-        CM["ChatModel<br/>模型抽象"]
-        TOOL["Tool<br/>工具抽象"]
-        MEM["Memory<br/>记忆抽象"]
-        RET["Retriever<br/>检索抽象"]
-        LOADER["Loader<br/>文档加载"]
-        TRANSFORMER["Transformer<br/>数据转换"]
-        ENCODER["Embedding<br/>向量化"]
+    subgraph ENG ["工程化层 Harness"]
+        WS["Workspace\n工作空间"]
+        SESS["Session\n会话"]
+        MEM["Memory\nMEMORY.md"]
+        SAND["Sandbox\n沙箱"]
+        SKILL["Skill\n声明式技能"]
+        SUB["Subagent\n子智能体"]
     end
-    subgraph "Automy 适配层 Adapter"
-        A_CM["Qwen/DeepSeek/GLM<br/>vLLM 网关"]
-        A_TOOL["MCP Tool Hub<br/>企业系统"]
-        A_MEM["分层记忆<br/>PG + Milvus + Redis"]
-        A_RET["RAG 混合检索<br/>Milvus + BM25"]
-        A_LOADER["MinIO 文档<br/>+ 解析 Worker"]
+    subgraph SYS ["系统层 Systems"]
+        EVT["Event\n事件"]
+        PERM["Permission\n权限"]
+        TEN["Multi-tenancy\n多租户"]
+        MID["Middleware\n中间件"]
     end
-    CHAIN --> CM
-    CHAIN --> TOOL
-    GRAPH --> CM
-    GRAPH --> TOOL
-    GRAPH --> MEM
-    GRAPH --> RET
-    AGENT --> CM
-    AGENT --> TOOL
-    AGENT --> MEM
-    CM --> A_CM
-    TOOL --> A_TOOL
+    subgraph PROTO ["协议层 Protocol"]
+        MCP["MCP\n工具协议"]
+        A2A["A2A\nAgent 间协议"]
+    end
+    subgraph ADAPT ["Automy 适配层 Adapter"]
+        A_MOD["Qwen/DeepSeek/GLM\n模型网关"]
+        A_TOOL["MCP Tool Hub\n企业系统"]
+        A_MEM["分层记忆\nPG + Milvus + Redis"]
+        A_RAG["RAG 混合检索\nMilvus + BM25"]
+        A_FS["AbstractFilesystem\nMinIO + 本地"]
+    end
+    REACT --> WS
+    REACT --> MEM
+    REACT --> SKILL
+    HARNESS --> WS
+    HARNESS --> SESS
+    HARNESS --> MEM
+    HARNESS --> SAND
+    SUP --> SUB
+    SUB --> REACT
+    WS --> A_FS
     MEM --> A_MEM
-    RET --> A_RET
-    LOADER --> A_LOADER
+    SKILL --> MCP
+    MCP --> A_TOOL
+    REACT --> A_MOD
+    EVT --> MID
+    PERM --> SAND
+    TEN -.-> WS
+    SUB -.->|跨进程| A2A
     </div>
   </div>
 </div>
 
-<h3>1. Chain — 线性编排</h3>
-<p>Chain 是最简单的编排原语,按顺序串联多个节点,前一个节点的输出作为后一个节点的输入。适合单一职责的线性流程,如「加载文档 → 分块 → 向量化 → 入库」。</p>
-<div class="code-block">
-<pre><code><span class="token-comment">// Eino Chain 示例:文档索引流水线</span>
-chain := <span class="token-function">NewChain</span>[]*Document]()
-    .<span class="token-function">Append</span>(loader.<span class="token-function">NewMinIOLoader</span>(bucket))
-    .<span class="token-function">Append</span>(transformer.<span class="token-function">NewSemanticSplitter</span>(512, 64))
-    .<span class="token-function">Append</span>(encoder.<span class="token-function">NewBGE_M3</span>(endpoint))
-    .<span class="token-function">Append</span>(retriever.<span class="token-function">NewMilvusIndexer</span>(collection))
+<h3>1. ReActAgent — 推理内核</h3>
+<p>ReActAgent 是 AgentScope 的推理内核,采用 ReAct 循环(Reasoning + Tool Call)。它本身保持轻量,不绑定工程化状态,适合单轮/多步任务规划场景。Automy 用 ReActAgent 承担「意图识别 → 工具决策 → 推理生成」的轻量路径。</p>
 
-result, err := chain.<span class="token-function">Invoke</span>(ctx, docs)</code></pre>
+<div class="code-block">
+<pre><code><span class="token-comment">// ReActAgent 示例:轻量推理 + 工具调用</span>
+<span class="token-keyword">import</span> io.agentscope.core.*;
+<span class="token-keyword">import</span> io.agentscope.tool.*;
+
+<span class="token-keyword">var</span> searchTool = <span class="token-keyword">new</span> <span class="token-property">SearchToolkit</span>().<span class="token-function">build</span>();
+<span class="token-keyword">var</span> codeTool   = <span class="token-keyword">new</span> <span class="token-property">CodeToolkit</span>().<span class="token-function">build</span>();
+
+<span class="token-keyword">var</span> agent = <span class="token-function">ReActAgent</span>.<span class="token-function">builder</span>()
+    .<span class="token-function">name</span>(<span class="token-string">"assistant"</span>)
+    .<span class="token-function">model</span>(<span class="token-keyword">new</span> <span class="token-property">QwenConfig</span>(<span class="token-string">"qwen-plus"</span>))
+    .<span class="token-function">tools</span>(List.<span class="token-function">of</span>(searchTool, codeTool))
+    .<span class="token-function">build</span>();
+
+<span class="token-comment">// 响应式流式输出(Project Reactor)</span>
+Flux&lt;String&gt; stream = agent.<span class="token-function">stream</span>(<span class="token-string">"分析 A 公司的营收增长趋势"</span>);
+stream.<span class="token-function">subscribe</span>(System.out::<span class="token-function">print</span>);</code></pre>
 </div>
 
-<h3>2. Graph — DAG 图编排</h3>
-<p>Graph 是 Eino ADK 最强大的编排原语,支持有向无环图(DAG)建模,可表达分支、并行、合并、循环(ReAct 模式)。每个节点(Node)是独立的处理单元,边(Edge)定义数据流向与条件跳转。</p>
+<h3>2. HarnessAgent — 工程化底座</h3>
+<p>HarnessAgent 在 ReActAgent 之上增加 Harness 工程化层(Workspace/Session/Memory/Sandbox/Skill/Subagent),面向企业级长任务:跨会话记忆、可恢复执行、权限审批、沙箱隔离。Automy 的「投研分析、尽调报告、法务审查」等长任务统一走 HarnessAgent。</p>
+
+<div class="code-block">
+<pre><code><span class="token-comment">// HarnessAgent 示例:企业级长任务 + Redis Session + 沙箱</span>
+<span class="token-keyword">import</span> io.agentscope.harness.*;
+
+<span class="token-keyword">var</span> harnessAgent = <span class="token-function">HarnessAgent</span>.<span class="token-function">builder</span>()
+    .<span class="token-function">name</span>(<span class="token-string">"coder"</span>)
+    .<span class="token-function">model</span>(<span class="token-keyword">new</span> <span class="token-property">QwenConfig</span>(<span class="token-string">"qwen-plus"</span>))
+    .<span class="token-function">filesystem</span>(<span class="token-keyword">new</span> <span class="token-property">LocalFilesystemSpec</span>(<span class="token-string">"./workspace"</span>))
+    .<span class="token-function">session</span>(<span class="token-keyword">new</span> <span class="token-property">RedisSession</span>(jedisPool))
+    .<span class="token-function">sandbox</span>(<span class="token-property">SandboxMode</span>.<span class="token-property">DOCKER</span>)
+    .<span class="token-function">build</span>();
+
+<span class="token-comment">// 跨会话恢复:Redis Session + Workspace 快照</span>
+harnessAgent.<span class="token-function">resume</span>(sessionId);</code></pre>
+</div>
+
+<h3>3. Supervisor — 多 Agent 编排</h3>
+<p>Supervisor 采用 Leader-Worker 模式编排多 Agent:Leader 负责任务分发与结果汇总,Worker(Subagent)负责领域执行。Subagent 通过 Markdown spec 声明,支持 <strong>同步阻塞</strong> 与 <strong>异步非阻塞</strong> 两种委派模式(<code>DelegationMode.SYNC</code> / <code>ASYNC</code>),替代传统 DAG 图编排。</p>
+
+<div class="code-block">
+<pre><code><span class="token-comment">// Supervisor 多 Agent:投资分析(财务 + 团队评估)</span>
+<span class="token-keyword">var</span> supervisor = <span class="token-function">Supervisor</span>.<span class="token-function">builder</span>()
+    .<span class="token-function">name</span>(<span class="token-string">"investment-analyst"</span>)
+    .<span class="token-function">subagents</span>(List.<span class="token-function">of</span>(
+        <span class="token-function">SubagentSpec</span>.<span class="token-function">fromMd</span>(<span class="token-string">"./subagents/financial-analyst.md"</span>),
+        <span class="token-function">SubagentSpec</span>.<span class="token-function">fromMd</span>(<span class="token-string">"./subagents/team-evaluator.md"</span>)
+    ))
+    .<span class="token-function">mode</span>(<span class="token-property">DelegationMode</span>.<span class="token-property">ASYNC</span>)  <span class="token-comment">// 并行委派</span>
+    .<span class="token-function">build</span>();
+
+<span class="token-comment">// 触发 Leader-Worker 协同</span>
+String report = supervisor.<span class="token-function">invoke</span>(<span class="token-string">"分析 A 公司,重点看财务和团队"</span>);</code></pre>
+</div>
+
+<h3>4. Workspace / Memory / Session</h3>
+<p>三大工程化组件共同支撑企业级有状态执行:</p>
+<ul>
+  <li><strong>Workspace</strong>:基于 <code>AbstractFilesystem</code> 统一抽象(本地磁盘 → Docker 沙箱 → 对象存储,一行切换),workspace 路径按 sessionId/userId 隔离</li>
+  <li><strong>Memory</strong>:<code>MEMORY.md</code> 自动管理 + 自动合并/压缩防上下文膨胀,对齐 Automy 三层记忆(事实/偏好/事件)</li>
+  <li><strong>Session</strong>:基于 Redis 实现分布式 Session,跨副本会话恢复,支持零停机滚动发布</li>
+</ul>
+
+<h3>5. Sandbox + Permission</h3>
+<p>内置 Sandbox 执行技能代码与外部脚本,沙箱路径按 sessionId/userId 隔离,权限通过 Permission 系统控制,工具调用按需审批:</p>
 <table class="table">
-  <thead><tr><th>能力</th><th>说明</th><th>Automy 应用场景</th></tr></thead>
+  <thead><tr><th>ApprovalMode</th><th>语义</th><th>Automy 应用场景</th></tr></thead>
   <tbody>
-    <tr><td>分支(Branch)</td><td>按条件选择下游节点</td><td>意图识别后路由到不同专家子图</td></tr>
-    <tr><td>并行(Parallel)</td><td>多个节点同时执行</td><td>财报解析 + 法律扫描 + 行业研究并行</td></tr>
-    <tr><td>合并(Merge)</td><td>多路输出汇合</td><td>并行结果聚合后生成综合报告</td></tr>
-    <tr><td>循环(Loop)</td><td>带终止条件的迭代</td><td>ReAct 多轮工具调用、报告迭代优化</td></tr>
-    <tr><td>子图(SubGraph)</td><td>Graph 嵌套 Graph</td><td>技能复用:把技能作为子图嵌入专家工作流</td></tr>
-    <tr><td>状态(State)</td><td>全局上下文与中间变量</td><td>跨节点共享会话上下文、记忆、工具结果</td></tr>
+    <tr><td><code>ALWAYS</code></td><td>每次调用都需审批</td><td>高风险:对外发邮件、删数据、调资金接口</td></tr>
+    <tr><td><code>ONCE</code></td><td>首次确认后本会话不再询问</td><td>中风险:CRM 查询、Wind 数据拉取</td></tr>
+    <tr><td><code>NEVER</code></td><td>无需审批(已预授权)</td><td>低风险:只读检索、向量召回</td></tr>
   </tbody>
 </table>
 
+<h3>6. @Tool 注解 + Toolkit</h3>
+<p>AgentScope 用 <code>@Tool</code> 注解标记方法,框架自动生成 JSON Schema 注入提示词。Toolkit 是工具集合,可注册到 MCP 服务发现(Nacos)。Automy 通过此机制对接 MCP Tool Hub。</p>
+
 <div class="code-block">
-<pre><code><span class="token-comment">// Eino Graph 示例:尽调报告工作流</span>
-g := <span class="token-function">NewGraph</span>().
-    <span class="token-function">AddNode</span>(<span class="token-string">"extract"</span>, extractMetricsNode).       <span class="token-comment">// 提取财报指标</span>
-    <span class="token-function">AddNode</span>(<span class="token-string">"legal"</span>, legalScanNode).             <span class="token-comment">// 法律风险扫描</span>
-    <span class="token-function">AddNode</span>(<span class="token-string">"industry"</span>, industryResearchNode).     <span class="token-comment">// 行业研究</span>
-    <span class="token-function">AddNode</span>(<span class="token-string">"merge"</span>, mergeFindingsNode).           <span class="token-comment">// 合并发现</span>
-    <span class="token-function">AddNode</span>(<span class="token-string">"report"</span>, generateReportNode).         <span class="token-comment">// 生成报告</span>
-    <span class="token-function">AddEdge</span>(<span class="token-string">"extract"</span>, <span class="token-string">"merge"</span>).
-    <span class="token-function">AddEdge</span>(<span class="token-string">"legal"</span>, <span class="token-string">"merge"</span>).
-    <span class="token-function">AddEdge</span>(<span class="token-string">"industry"</span>, <span class="token-string">"merge"</span>).       <span class="token-comment">// 三路并行 → 合并</span>
-    <span class="token-function">AddEdge</span>(<span class="token-string">"merge"</span>, <span class="token-string">"report"</span>)
-
-<span class="token-comment">// 并行执行 extract/legal/industry,完成后触发 merge</span>
-err := g.<span class="token-function">Compile</span>().<span class="token-function">Invoke</span>(ctx, input)</code></pre>
-</div>
-
-<h3>3. Tool — 工具抽象</h3>
-<p>Tool 是 Agent 调用外部能力的标准接口,基于 Function Calling 模式。Automy 通过 Tool 接口封装 MCP 协议,使所有 MCP Server 提供的工具都能被 Agent 直接调用。</p>
-<ul>
-  <li><strong>ToolsNode</strong>:批量工具调用节点,接入 LLM 的 Function Calling 决策</li>
-  <li><strong>ToolInput / ToolOutput</strong>:标准化输入输出,带 JSON Schema 描述</li>
-  <li><strong>InvokableTool</strong>:无状态工具(查询类)</li>
-  <li><strong>StreamableTool</strong>:流式工具(如长任务进度推送)</li>
-</ul>
-
-<h3>4. Memory — 记忆抽象</h3>
-<p>Memory 抽象提供短期会话历史与长期跨会话记忆的统一接口。Automy 在此基础上实现三层记忆架构(详见 <a href="#/docs/architecture/memory-system">记忆系统章节</a>)。</p>
-<ul>
-  <li><strong>ChatHistory</strong>:会话消息历史,自动窗口管理(滑动窗口 / 摘要压缩)</li>
-  <li><strong>LongTermMemory</strong>:跨会话事实/偏好/事件读写</li>
-  <li><strong>Manager</strong>:统一管理短期与长期记忆,Agent 通过 Manager 透明访问</li>
-</ul>
-
-<h3>5. ChatModel — 模型抽象</h3>
-<p>ChatModel 是 LLM 调用的标准接口,屏蔽不同模型提供商的差异。Automy 通过 ChatModel 接口对接自研模型网关,实现多模型路由与降级。</p>
-<div class="code-block">
-<pre><code><span class="token-comment">// Automy 自研 ChatModel 实现:走模型网关</span>
-<span class="token-keyword">type</span> GatewayChatModel <span class="token-keyword">struct</span> {
-    endpoint <span class="token-property">string</span>      <span class="token-comment">// 模型网关地址</span>
-    apiKey   <span class="token-property">string</span>
-    model    <span class="token-property">string</span>      <span class="token-comment">// 默认模型,可被请求覆盖</span>
+<pre><code><span class="token-comment">// @Tool 注解 + Toolkit 示例</span>
+<span class="token-keyword">public class</span> <span class="token-property">CrmToolkit</span> {
+    <span class="token-property">@Tool</span>(desc = <span class="token-string">"查询客户商机列表"</span>)
+    <span class="token-keyword">public</span> List&lt;Opportunity&gt; <span class="token-function">listOpportunities</span>(
+        <span class="token-property">@Param</span>(<span class="token-string">"customerId"</span>) String customerId,
+        <span class="token-property">@Param</span>(<span class="token-string">"limit"</span>) <span class="token-keyword">int</span> limit
+    ) {
+        <span class="token-keyword">return</span> crmClient.<span class="token-function">query</span>(customerId, limit);
+    }
 }
 
-<span class="token-keyword">func</span> (m *GatewayChatModel) <span class="token-function">Generate</span>(ctx, messages) (<span class="token-property">*Response</span>, error) {
-    <span class="token-comment">// 1. 通过 OpenAI 兼容协议调用网关</span>
-    <span class="token-comment">// 2. 网关内部按场景路由到 Qwen / DeepSeek / GLM</span>
-    <span class="token-comment">// 3. 自动降级:主模型失败 → 备用模型</span>
-}
-
-<span class="token-keyword">func</span> (m *GatewayChatModel) <span class="token-function">Stream</span>(ctx, messages) (<span class="token-property">StreamReader</span>, error) {
-    <span class="token-comment">// SSE 流式返回 Token</span>
-}</code></pre>
+<span class="token-comment">// 注册到 Toolkit,自动生成 JSON Schema</span>
+<span class="token-keyword">var</span> toolkit = <span class="token-function">Toolkit</span>.<span class="token-function">of</span>(<span class="token-keyword">new</span> <span class="token-property">CrmToolkit</span>());
+agent = agent.<span class="token-function">toBuilder</span>().<span class="token-function">toolkit</span>(toolkit).<span class="token-function">build</span>();</code></pre>
 </div>
 
-<h3>6. Retriever — 检索抽象</h3>
-<p>Retriever 抽象 RAG 检索能力,Automy 实现了混合检索器(向量 + BM25 关键词 + 元数据过滤),并通过 Reranker 精排提升精度。</p>
+<h2>三、Automy Agent 执行时序(基于 AgentScope)</h2>
 
-<h2>三、ADK 在 Automy 中的应用 — 端到端时序</h2>
-
-<p>下图展示一次完整的 Agent 执行时序:用户输入 → 规划(Graph) → 工具调用(MCP) → 记忆读写 → 模型推理 → 流式输出。这是 Automy 智能体运行时最核心的执行路径。</p>
+<p>下图展示一次完整的 Agent 执行时序:用户输入 → 网关鉴权 → Session 加载 → ReActAgent 规划 → 调用 MCP Tool / Memory / RAG → 模型生成 → 流式回传 → Trace 上报 LangFuse。这是 Automy 智能体运行时最核心的执行路径。</p>
 
 <div class="card">
   <div class="card-header">
-    <span class="card-title">Automy Agent 执行时序(基于 Eino ADK Graph)</span>
+    <span class="card-title">Automy Agent 执行时序(基于 AgentScope ReActAgent)</span>
     <span class="badge badge-primary">Mermaid 时序图</span>
   </div>
   <div class="card-body">
     <div class="mermaid">
 sequenceDiagram
     participant U as 用户
-    participant SE as Session Service
-    participant ADK as Eino ADK Runtime
-    participant PLAN as Planner Node
-    participant MEM as Memory Manager
-    participant RET as Retriever
-    participant TOOL as ToolsNode (MCP)
-    participant CM as ChatModel
-    participant MGW as Model Gateway
-    participant AUD as Audit (NATS)
+    participant K as Kong/Higress 网关
+    participant S as Session Service
+    participant A as ReActAgent Runtime
+    participant M as Memory
+    participant R as RAG
+    participant T as MCP Tool Hub
+    participant G as Model Gateway
 
-    U->>SE: POST /messages (SSE)
-    SE->>ADK: Invoke(session, prompt, ctx)
-    Note over ADK: 加载专家 Graph 定义
+    U->>K: POST /messages (SSE)
+    K->>S: JWT 鉴权 + 限流 + 转发
+    S->>A: stream(prompt, sessionCtx)
+    Note over A: 加载 HarnessAgent + MEMORY.md
 
-    ADK->>PLAN: 规划节点(意图识别)
-    PLAN->>MEM: 读取用户偏好/项目记忆
-    MEM-->>PLAN: 返回 Top-K 相关记忆
-    PLAN->>RET: 知识库检索(可选)
-    RET-->>PLAN: 返回文档片段
-    PLAN-->>ADK: 规划结果 + 路由分支
+    A->>M: 读取用户偏好/项目记忆
+    M-->>A: 返回 Top-K 相关记忆
+    A->>R: 知识库检索(可选)
+    R-->>A: 返回文档片段
 
-    alt 需要工具调用
-        ADK->>CM: 推理:决定调用哪些工具
-        CM->>MGW: Chat Completion
-        MGW-->>CM: tool_calls 决策
-        CM-->>ADK: 工具调用列表
-        ADK->>TOOL: 并行调用 MCP 工具
-        TOOL->>TOOL: 鉴权 + 脱敏 + 调用
-        TOOL-->>ADK: 工具结果(已脱敏)
-        ADK->>AUD: 审计事件(工具调用)
+    loop ReAct 循环
+        alt 需要工具调用
+            A->>G: 推理:决定调用哪些工具
+            G-->>A: tool_calls 决策
+            A->>T: 并行调用 MCP 工具
+            T->>T: Permission 审批 + 调用
+            T-->>A: 工具结果(已脱敏)
+        end
     end
 
-    ADK->>CM: 综合上下文生成最终回答
-    CM->>MGW: Stream Chat Completion
+    A->>G: 综合上下文生成最终回答
     loop 流式输出
-        MGW-->>CM: Token chunk
-        CM-->>ADK: Token chunk
-        ADK-->>SE: Token event (SSE)
-        SE-->>U: 逐字输出
+        G-->>A: Token chunk
+        A-->>S: Token event (Reactor 流)
+        S-->>K: SSE 事件
+        K-->>U: 逐字输出
     end
 
     par 异步后处理
-        ADK->>MEM: 提取并写入长期记忆
-        ADK->>AUD: 完整执行 Trace 上报
+        A->>M: 提取并写入 MEMORY.md
+        A->>T: Trace 上报 LangFuse / ARMS
     end
     </div>
   </div>
@@ -268,92 +292,132 @@ sequenceDiagram
 
 <h3>关键执行节点说明</h3>
 <table class="table">
-  <thead><tr><th>节点</th><th>职责</th><th>Eino ADK 组件</th></tr></thead>
+  <thead><tr><th>节点</th><th>职责</th><th>AgentScope 组件</th></tr></thead>
   <tbody>
-    <tr><td>Planner 规划</td><td>意图识别、任务分解、路由分支</td><td>ChatModel + Graph Branch</td></tr>
-    <tr><td>Memory 记忆检索</td><td>读取用户偏好、项目记忆、会话历史</td><td>Memory Manager + Retriever</td></tr>
-    <tr><td>RAG 知识检索</td><td>从企业文档库召回相关片段</td><td>Retriever + Reranker</td></tr>
-    <tr><td>Tools 工具调用</td><td>Function Calling,并行调用 MCP 工具</td><td>ToolsNode + Tool</td></tr>
-    <tr><td>ChatModel 模型推理</td><td>综合上下文生成最终回答</td><td>ChatModel (Stream)</td></tr>
-    <tr><td>Memory 写入</td><td>异步提取事实/偏好写入长期记忆</td><td>Memory Manager</td></tr>
-    <tr><td>Audit 审计</td><td>全链路事件上报 NATS</td><td>OpenTelemetry + Hook</td></tr>
+    <tr><td>网关接入</td><td>JWT 鉴权、限流、路由</td><td>Kong / Higress</td></tr>
+    <tr><td>Session 加载</td><td>恢复会话上下文、HarnessAgent 状态</td><td>Redis Session + Workspace 快照</td></tr>
+    <tr><td>ReAct 规划</td><td>意图识别、任务分解、工具决策</td><td>ReActAgent 推理内核</td></tr>
+    <tr><td>Memory 记忆检索</td><td>读取用户偏好、项目记忆、会话历史</td><td>Memory + MEMORY.md</td></tr>
+    <tr><td>RAG 知识检索</td><td>从企业文档库召回相关片段</td><td>knowledge/ + RAG 索引</td></tr>
+    <tr><td>Tools 工具调用</td><td>Function Calling,并行调用 MCP 工具</td><td>@Tool + Toolkit + MCP Client</td></tr>
+    <tr><td>模型推理</td><td>综合上下文生成最终回答</td><td>Model 抽象(QwenConfig/DashScope)</td></tr>
+    <tr><td>流式输出</td><td>Reactor Flux 流式 Token 回传</td><td>Project Reactor</td></tr>
+    <tr><td>Trace 上报</td><td>每步 Span 自动上报</td><td>OpenTelemetry → LangFuse / ARMS</td></tr>
   </tbody>
 </table>
 
-<h2>四、ADK 与技能/专家层的关系</h2>
+<h2>四、AgentScope 与技能/专家层的关系</h2>
 
-<p>Automy 的「技能」与「专家」两个上层抽象,在 Eino ADK 层面都有明确的对应关系,形成清晰的从底层编排到上层产品的映射。</p>
+<p>Automy 的「技能」与「专家」两个上层抽象,在 AgentScope 层面都有明确的对应关系,形成清晰的从底层编排到上层产品的映射。</p>
 
 <div class="card">
   <div class="card-body">
     <div class="mermaid">
 graph TB
-    subgraph "产品层 Product"
-        EXP["专家 Expert<br/>投研分析师 / 法务顾问 / 合规官"]
-        SKILL["技能 Skill<br/>财务报表解析 / 合同审查 / 风险扫描"]
+    subgraph PROD ["产品层 Product"]
+        EXP["专家 Expert\n投研分析师 / 法务顾问 / 合规官"]
+        SKILL["技能 Skill\n财务报表解析 / 合同审查 / 风险扫描"]
     end
-    subgraph "ADK 编排层"
-        GRAPH_E["Expert Graph<br/>专家级完整工作流"]
-        GRAPH_S["Skill SubGraph<br/>可复用编排片段"]
-        CHAIN_S["Skill Chain<br/>线性简单技能"]
+    subgraph AGSC ["AgentScope 编排层"]
+        SUP2["Supervisor\n专家级多 Agent"]
+        SUB2["Subagent (Markdown spec)\n专家子智能体"]
+        SK_MD["skills/*.md\n声明式 Skill 文件"]
+        REACT2["ReActAgent / HarnessAgent\n执行内核"]
     end
-    subgraph "组件层 Components"
-        CM["ChatModel"]
-        TOOL["Tools (MCP)"]
-        MEM["Memory"]
-        RET["Retriever"]
+    subgraph COMP ["工程化层 Harness"]
+        WS2["Workspace + Sandbox\n技能沙箱"]
+        MEM2["Memory\n专家绑定记忆"]
+        PERM2["Permission\n工具审批"]
     end
-    EXP -->|1 专家 = Graph + Persona + 绑定资源| GRAPH_E
-    SKILL -->|2 技能 = 可复用编排片段| GRAPH_S
-    SKILL -->|简单技能| CHAIN_S
-    GRAPH_E -->|嵌入| GRAPH_S
-    GRAPH_S --> CM
-    GRAPH_S --> TOOL
-    GRAPH_S --> MEM
-    GRAPH_S --> RET
-    GRAPH_E --> CM
-    GRAPH_E --> TOOL
-    GRAPH_E --> MEM
-    GRAPH_E --> RET
+    EXP -->|1 专家 = Supervisor + Subagent + Persona| SUP2
+    SKILL -->|2 技能 = skills/*.md 声明式| SK_MD
+    SUP2 --> SUB2
+    SUB2 --> REACT2
+    SK_MD --> REACT2
+    REACT2 --> WS2
+    REACT2 --> MEM2
+    REACT2 --> PERM2
     </div>
   </div>
 </div>
 
-<h3>技能 = ADK Graph 的可复用编排片段</h3>
-<p>技能是 Automy 中可复用、可组合的能力单元,在 ADK 层面对应一个 <strong>SubGraph</strong> 或 <strong>Chain</strong>。技能可以独立开发、测试、发布,然后被多个专家 Graph 嵌入复用。</p>
-<ul>
-  <li><strong>简单技能</strong>:线性流程,如「财务报表解析」= 加载 PDF → 提取表格 → 结构化输出(Chain)</li>
-  <li><strong>复杂技能</strong>:DAG 工作流,如「尽调报告」= 多路并行分析 + 合并 + 报告生成(Graph)</li>
-  <li><strong>技能组合</strong>:专家 Graph 可嵌入多个技能 SubGraph,通过 Graph 嵌套实现能力组合</li>
-</ul>
-
-<h3>专家 = ADK Graph + Persona + 绑定资源</h3>
-<p>专家是面向特定领域的高级 Agent,在 ADK 层面对应一个完整的 <strong>Graph</strong>,附加 Persona(角色设定)与资源绑定(工具/知识/记忆)。</p>
+<h3>映射关系</h3>
 <table class="table">
-  <thead><tr><th>专家要素</th><th>ADK 层面映射</th><th>示例:投研分析师</th></tr></thead>
+  <thead><tr><th>Automy 抽象</th><th>AgentScope 对应</th><th>说明</th></tr></thead>
   <tbody>
-    <tr><td>Persona 角色设定</td><td>System Prompt 注入</td><td>「你是资深投研分析师,擅长行业分析、企业估值、风险识别...」</td></tr>
-    <tr><td>核心工作流</td><td>Expert Graph</td><td>意图识别 → 检索 → 工具调用 → 推理 → 报告</td></tr>
-    <tr><td>绑定技能</td><td>嵌入 Skill SubGraph</td><td>财务报表解析、IPO 风险分析、尽调报告</td></tr>
-    <tr><td>绑定工具</td><td>ToolsNode 工具集</td><td>Wind 数据查询、内部研究库检索</td></tr>
-    <tr><td>绑定知识</td><td>Retriever Collection</td><td>行业研究库、招股说明书库</td></tr>
-    <tr><td>绑定记忆</td><td>Memory Scope</td><td>用户级 + 项目级 + 全局行业知识</td></tr>
+    <tr>
+      <td><strong>技能 Skill</strong></td>
+      <td><code>skills/*.md</code> 声明式 Skill 文件</td>
+      <td>用 Markdown 声明技能触发条件、参数 Schema、调用示例,框架自动注入提示词</td>
+    </tr>
+    <tr>
+      <td><strong>专家 Agent</strong></td>
+      <td>Multi-Agent <code>Subagent</code> 声明(Markdown spec)</td>
+      <td>每个专家对应一个 Subagent,通过 <code>SubagentSpec.fromMd()</code> 加载,Supervisor 统一编排</td>
+    </tr>
+    <tr>
+      <td><strong>技能沙箱</strong></td>
+      <td>AgentScope 内置 Sandbox(Docker + 对象存储快照)</td>
+      <td>本地磁盘 → Docker → 对象存储一行切换,workspace 按 sessionId/userId 隔离</td>
+    </tr>
+    <tr>
+      <td><strong>专家 Persona</strong></td>
+      <td>Subagent Markdown spec 中的角色设定</td>
+      <td>System Prompt 注入,如「你是资深投研分析师」</td>
+    </tr>
+    <tr>
+      <td><strong>绑定工具</strong></td>
+      <td><code>@Tool</code> 注解 + Toolkit + MCP</td>
+      <td>Toolkit 注册到 Nacos,通过 MCP 协议暴露给 Subagent</td>
+    </tr>
+    <tr>
+      <td><strong>绑定知识</strong></td>
+      <td><code>knowledge/</code> + RAG 索引</td>
+      <td>专家级 RAG Collection,通过 AbstractFilesystem 挂载</td>
+    </tr>
+    <tr>
+      <td><strong>绑定记忆</strong></td>
+      <td>Memory + MEMORY.md(按 userId 划分 scope)</td>
+      <td>用户级 + 项目级 + 全局行业知识三层</td>
+    </tr>
   </tbody>
 </table>
 
-<h2>五、ADK 与模型网关对接</h2>
+<h3>技能 = AgentScope skills/*.md 声明式 Skill</h3>
+<p>技能在 AgentScope 层面对应一个 <strong>声明式 Skill 文件</strong>(Markdown)。技能可独立开发、测试、发布,然后被多个专家 Subagent 复用。Subagent 通过 Markdown spec 嵌入技能列表。</p>
+<ul>
+  <li><strong>简单技能</strong>:单步工具调用,如「财务报表解析」= 加载 PDF → 提取表格 → 结构化输出</li>
+  <li><strong>复杂技能</strong>:多步 ReAct 循环,如「尽调报告」= 多源检索 + 多轮推理 + 报告生成</li>
+  <li><strong>技能组合</strong>:专家 Subagent spec 中引用多个技能文件,实现能力组合</li>
+</ul>
 
-<p>Eino ADK 通过 ChatModel 接口与 LLM 交互,Automy 在此接口下实现「模型网关适配器」,屏蔽多模型差异,提供路由、降级、配额、缓存能力。</p>
+<h3>专家 = Supervisor + Subagent + 绑定资源</h3>
+<p>专家是面向特定领域的高级 Agent,在 AgentScope 层面对应一个 <strong>Subagent 声明</strong>(Markdown spec),由 Supervisor 统一编排。</p>
+<table class="table">
+  <thead><tr><th>专家要素</th><th>AgentScope 映射</th><th>示例:投研分析师</th></tr></thead>
+  <tbody>
+    <tr><td>Persona 角色设定</td><td>Subagent spec 中的 system prompt</td><td>「你是资深投研分析师,擅长行业分析、企业估值、风险识别...」</td></tr>
+    <tr><td>核心工作流</td><td>ReActAgent + 多步 ReAct 循环</td><td>意图识别 → 检索 → 工具调用 → 推理 → 报告</td></tr>
+    <tr><td>绑定技能</td><td>引用 skills/*.md</td><td>财务报表解析、IPO 风险分析、尽调报告</td></tr>
+    <tr><td>绑定工具</td><td>Toolkit + MCP Client</td><td>Wind 数据查询、内部研究库检索</td></tr>
+    <tr><td>绑定知识</td><td>knowledge/ Collection</td><td>行业研究库、招股说明书库</td></tr>
+    <tr><td>绑定记忆</td><td>Memory scope(userId 维度)</td><td>用户级 + 项目级 + 全局行业知识</td></tr>
+  </tbody>
+</table>
+
+<h2>五、AgentScope 与模型网关对接</h2>
+
+<p>AgentScope 通过 <strong>Model 抽象</strong>(<code>QwenConfig</code> / <code>DashScope</code> / OpenAI 兼容)屏蔽不同模型提供商差异。Automy 在此抽象下对接「模型网关」(LiteLLM / 自研),实现多模型路由与降级。</p>
 
 <div class="card">
   <div class="card-body">
     <div class="mermaid">
 graph LR
-    ADK["Eino ADK<br/>ChatModel 接口"] -->|OpenAI 兼容| GW["模型网关<br/>Model Gateway"]
-    GW -->|路由| ROUTER["路由策略<br/>场景 + 负载 + 成本"]
-    ROUTER -->|主路径| QW["Qwen2.5-72B<br/>vLLM"]
-    ROUTER -->|备路径| DS["DeepSeek-V3<br/>vLLM"]
-    ROUTER -->|轻量任务| GLM["GLM-4-9B<br/>vLLM"]
+    ADK["AgentScope\nModel 抽象"] -->|OpenAI 兼容| GW["模型网关\nLiteLLM / 自研"]
+    GW -->|路由| ROUTER["路由策略\n场景 + 负载 + 成本"]
+    ROUTER -->|主路径| QW["Qwen2.5-72B\nDashScope/vLLM"]
+    ROUTER -->|备路径| DS["DeepSeek-V3\nvLLM"]
+    ROUTER -->|轻量任务| GLM["GLM-4-9B\nvLLM"]
     ROUTER -->|代码任务| CODE["DeepSeek-Coder"]
     GW -->|降级| FALLBACK["故障自动切换"]
     GW -->|配额| QUOTA["用户/部门配额"]
@@ -375,72 +439,90 @@ graph LR
   </tbody>
 </table>
 
-<h2>六、Eino ADK vs LangGraph 选型对比</h2>
+<h2>六、选型对比:AgentScope Java 2.0 vs Eino ADK vs LangGraph</h2>
 
-<p>在选型阶段,Automy 团队重点对比了 Eino ADK 与 LangGraph(LangChain 旗下),最终选择 Eino ADK。下表是详细对比:</p>
+<p>在选型阶段,Automy 团队重点对比了 AgentScope Java 2.0、Eino ADK(字节跳动 Go)、LangGraph(LangChain 旗下 Python)三个框架,最终因 Java 技术栈对齐与 Spring 生态融合选择 AgentScope Java 2.0。下表是详细对比:</p>
 
 <table class="table">
-  <thead><tr><th>维度</th><th>Eino ADK</th><th>LangGraph</th></tr></thead>
+  <thead><tr><th>维度</th><th>AgentScope Java 2.0</th><th>Eino ADK</th><th>LangGraph</th></tr></thead>
   <tbody>
     <tr>
       <td><strong>开发语言</strong></td>
+      <td>Java(JDK 17+)</td>
       <td>Go</td>
       <td>Python</td>
     </tr>
     <tr>
-      <td><strong>性能</strong></td>
-      <td>高并发、低内存,Goroutine 模型无 GIL</td>
-      <td>受 GIL 限制,高并发需多进程,内存占用高</td>
+      <td><strong>技术栈对齐</strong></td>
+      <td>对齐团队 Java + Spring Boot 微服务</td>
+      <td>需引入 Go 工具链,与 Java 体系错位</td>
+      <td>需引入 Python 桥接,运维复杂</td>
     </tr>
     <tr>
-      <td><strong>生态成熟度</strong></td>
-      <td>较新(2024 开源),中文社区活跃</td>
-      <td>成熟,英文社区庞大,集成最多</td>
+      <td><strong>Agent 范式</strong></td>
+      <td>ReActAgent + HarnessAgent + Supervisor</td>
+      <td>Agent + Chain + Graph(DAG)</td>
+      <td>StateGraph 状态机式</td>
     </tr>
     <tr>
-      <td><strong>编排模型</strong></td>
-      <td>Chain + Graph 声明式,支持子图嵌套</td>
-      <td>StateGraph 状态机式,节点间显式传递 State</td>
+      <td><strong>工程化底座</strong></td>
+      <td>Harness 内置(Workspace/Session/Memory/Sandbox/Skill/Subagent)</td>
+      <td>无统一抽象,需自研</td>
+      <td>需自研,依赖 LangChain 生态拼装</td>
     </tr>
     <tr>
-      <td><strong>流式支持</strong></td>
-      <td>原生 Stream API,全链路流式</td>
-      <td>支持但需要额外处理,Python 异步较复杂</td>
-    </tr>
-    <tr>
-      <td><strong>类型安全</strong></td>
-      <td>Go 泛型 + 接口,编译期检查</td>
-      <td>Python 类型注解,运行时易错</td>
-    </tr>
-    <tr>
-      <td><strong>可观测性</strong></td>
-      <td>内置 OpenTelemetry,自动 Span</td>
-      <td>需集成 LangSmith,商业产品</td>
-    </tr>
-    <tr>
-      <td><strong>多 Agent 协同</strong></td>
-      <td>Agent 抽象 + Graph 嵌套</td>
+      <td><strong>多 Agent 编排</strong></td>
+      <td>Supervisor(Leader-Worker)+ Markdown spec 声明 Subagent</td>
+      <td>Graph 嵌套,需手工编排</td>
       <td>Multi-Agent 模式成熟(Supervisor 等)</td>
     </tr>
     <tr>
-      <td><strong>工具生态</strong></td>
-      <td>Eino-ext 扩展库,主流模型/向量库支持</td>
+      <td><strong>MCP 支持</strong></td>
+      <td>原生 + A2A 协议(可注册 Nacos 跨机)</td>
+      <td>需自适配</td>
+      <td>需自适配</td>
+    </tr>
+    <tr>
+      <td><strong>分布式会话</strong></td>
+      <td>Redis Session + Workspace 快照,零停机滚动发布</td>
+      <td>自研,外部状态存储</td>
+      <td>需借助外部存储自研</td>
+    </tr>
+    <tr>
+      <td><strong>可观测</strong></td>
+      <td>OpenTelemetry 内置(对接 LangFuse / ARMS)</td>
+      <td>OpenTelemetry 需自接</td>
+      <td>需集成 LangSmith(商业)</td>
+    </tr>
+    <tr>
+      <td><strong>并发模型</strong></td>
+      <td>Project Reactor 响应式(非阻塞高并发)</td>
+      <td>Goroutine(无 GIL)</td>
+      <td>受 GIL 限制,高并发需多进程</td>
+    </tr>
+    <tr>
+      <td><strong>生态</strong></td>
+      <td>Nacos / Higress / QwenPaw / AgentTeams</td>
+      <td>eino-ext 扩展库</td>
       <td>LangChain Tools 数百个,生态最丰富</td>
     </tr>
     <tr>
-      <td><strong>部署运维</strong></td>
-      <td>单二进制,容器化简单</td>
-      <td>Python 依赖管理复杂,虚拟环境/Conda</td>
+      <td><strong>许可证</strong></td>
+      <td>Apache-2.0</td>
+      <td>Apache-2.0</td>
+      <td>MIT</td>
+    </tr>
+    <tr>
+      <td><strong>维护方</strong></td>
+      <td>阿里达摩院</td>
+      <td>字节跳动 CloudWeGo</td>
+      <td>LangChain Inc.</td>
     </tr>
     <tr>
       <td><strong>适合场景</strong></td>
-      <td>Go 后端、企业级、高性能、私有化</td>
-      <td>Python 生态、研究型、原型快速迭代</td>
-    </tr>
-    <tr>
-      <td><strong>企业级验证</strong></td>
-      <td>字节跳动内部大规模验证</td>
-      <td>创业公司为主,大企业案例较少</td>
+      <td>Java 后端、企业级、Spring 生态、私有化</td>
+      <td>Go 后端、企业级、高性能</td>
+      <td>Python 生态、研究型、原型迭代</td>
     </tr>
   </tbody>
 </table>
@@ -448,14 +530,15 @@ graph LR
 <div class="alert alert-success">
   <div class="alert__icon">✓</div>
   <div class="alert__body">
-    <div class="alert__title">选择 Eino ADK 的关键原因</div>
+    <div class="alert__title">选择 AgentScope Java 2.0 的关键原因</div>
     <div class="alert__desc">
       <ol style="margin:0; padding-left:20px;">
-        <li><strong>Go 技术栈统一</strong>:Automy 后端统一 Go,Eino 避免引入 Python 桥接的开销与运维复杂度</li>
-        <li><strong>高性能</strong>:Goroutine 并发模型支撑高负载 Agent 调度,单实例万级 QPS</li>
-        <li><strong>企业级稳定</strong>:字节内部大规模验证,代码质量与文档完整度高</li>
-        <li><strong>国产可控</strong>:符合金融行业国产化要求,中文社区支持好</li>
-        <li><strong>流式优先</strong>:原生 Stream API 与 Automy SSE 流式输出契合</li>
+        <li><strong>Java 技术栈对齐</strong>:团队主语言 Java(JDK 17+),无需引入 Go/Python 桥接,工具链与 CI/CD 复用既有体系</li>
+        <li><strong>Spring 生态融合</strong>:原生嵌入 Spring Boot + Spring Cloud + Nacos,与既有微服务无缝对接</li>
+        <li><strong>Harness 工程化内置</strong>:Workspace/Session/Memory/Sandbox/Skill/Subagent 开箱即用,降低企业级分布式落地成本</li>
+        <li><strong>MCP + A2A 原生</strong>:对齐 Automy MCP 集成层,A2A 支持跨进程跨机多 Agent 协同</li>
+        <li><strong>分布式开箱即用</strong>:Redis Session + Workspace 快照,跨副本会话恢复,零停机滚动发布</li>
+        <li><strong>Reactive 高并发</strong>:Project Reactor 响应式流,非阻塞 IO 支撑高负载 Agent 调度与流式输出</li>
       </ol>
     </div>
   </div>
@@ -463,57 +546,58 @@ graph LR
 
 <h2>七、局限与对策</h2>
 
-<p>Eino ADK 作为较新的框架,存在一些生态与能力上的局限,Automy 通过以下对策补齐:</p>
+<p>AgentScope Java 2.0 作为 2026-07 GA 的新框架,存在一些生态与能力上的局限,Automy 通过以下对策补齐:</p>
 
 <table class="table">
   <thead><tr><th>局限</th><th>影响</th><th>对策</th></tr></thead>
   <tbody>
     <tr>
-      <td>工具生态较新</td>
-      <td>部分企业系统(如特定 CRM/ERP)无官方 Eino Tool 适配</td>
-      <td>用 ADK 官方 Tool 接口自研 Adapter,通过 MCP 协议桥接已有企业 MCP Server</td>
+      <td>生态较新</td>
+      <td>2026-07 GA,社区文档以英文/阿里云为主,中文实战资料相对有限</td>
+      <td>内部沉淀最佳实践 + 模板 Subagent / Skill,关键路径文档化,留待实施期与官方文档(java.agentscope.io)校准</td>
     </tr>
     <tr>
-      <td>Python 工具桥接</td>
-      <td>部分 AI 能力(如 Unstructured 解析、特定模型)仅有 Python SDK</td>
-      <td>用 gRPC/HTTP 调用 Python 微服务(PDF 解析 Worker、Embedding 服务),保持核心编排层纯 Go</td>
+      <td>Reactive 编程门槛</td>
+      <td>Project Reactor 响应式范式对团队是新概念,调试与排错心智成本高</td>
+      <td>路线图新增 M2.5「AgentScope Java 2.0 + Project Reactor 团队赋能」里程碑,关键路径文档 + Pair 编程</td>
+    </tr>
+    <tr>
+      <td>部分企业系统无现成 Tool 适配</td>
+      <td>特定 CRM/ERP/数据中台无 AgentScope Toolkit 适配</td>
+      <td>通过 MCP Adapter 桥接已有企业 MCP Server,与既有 MCP 集成层设计一致</td>
     </tr>
     <tr>
       <td>RAG 高级模式</td>
       <td>复杂 RAG 模式(HyDE、Multi-Query)需自行实现</td>
-      <td>在 Retriever 抽象上自研 QueryRewriter、HyDE 生成器、多路召回融合器</td>
+      <td>在 knowledge/ + RAG 索引上自研 QueryRewriter、HyDE 生成器、多路召回融合器</td>
     </tr>
     <tr>
-      <td>调试工具</td>
-      <td>可视化调试工具不如 LangSmith 完善</td>
-      <td>基于 OpenTelemetry + Jaeger 自建 Trace 可视化,Graph 执行轨迹可观测</td>
-    </tr>
-    <tr>
-      <td>示例与教程</td>
-      <td>中文教程较多但英文资料少</td>
-      <td>内部维护最佳实践文档 + 模板技能,降低开发门槛</td>
+      <td>与既有 Spring 业务微服务边界</td>
+      <td>业务微服务与 Agent 运行时边界易混淆</td>
+      <td>架构文档明确:业务微服务保持 Spring Boot,Agent 编排独立部署 HarnessAgent 服务,通过 A2A/MCP 解耦</td>
     </tr>
   </tbody>
 </table>
 
-<h2>八、Agent 执行 Trace 设计(OpenTelemetry)</h2>
+<h2>八、Agent 执行 Trace 设计(OpenTelemetry 内置)</h2>
 
-<p>Eino ADK 原生集成 OpenTelemetry,每个 Graph 节点自动生成 Span。Automy 在此基础上扩展业务语义的 Trace 属性,实现端到端可观测。</p>
+<p>AgentScope Java 2.0 <strong>原生集成 OpenTelemetry</strong>,每个 Reasoning step 与 Tool call 自动生成 Span,无需侵入式埋点。Automy 在此基础上对接 <strong>LangFuse</strong>(开源)/ <strong>阿里云 ARMS</strong>(商业),实现端到端 Agent Trace 可观测。</p>
 
 <div class="card">
   <div class="card-body">
     <div class="mermaid">
 graph TB
-    ROOT["Trace Root<br/>agent.invoke"] --> S1["Span: planner.plan"]
+    ROOT["Trace Root\nagent.invoke"] --> S1["Span: react.reasoning"]
     ROOT --> S2["Span: memory.retrieve"]
     ROOT --> S3["Span: rag.search"]
-    ROOT --> S4["Span: tools.invoke"]
-    ROOT --> S5["Span: chatmodel.generate"]
+    ROOT --> S4["Span: tool.invoke"]
+    ROOT --> S5["Span: model.generate"]
     S4 --> S41["Span: mcp.crm.query"]
     S4 --> S42["Span: mcp.wind.search"]
     S5 --> S51["Span: model_gateway.route"]
     S51 --> S52["Span: vllm.inference"]
     ROOT --> S6["Span: memory.write"]
+    ROOT --> S7["Span: langfuse.export"]
     </div>
   </div>
 </div>
@@ -524,14 +608,15 @@ graph TB
   <tbody>
     <tr><td>trace_id</td><td>整次 Agent 调用的唯一 ID</td><td>4a3b2c1d...</td></tr>
     <tr><td>span_id</td><td>节点 Span ID</td><td>7f3a2b...</td></tr>
-    <tr><td>node_type</td><td>节点类型</td><td>planner / tool / chatmodel</td></tr>
+    <tr><td>node_type</td><td>节点类型</td><td>reasoning / tool / model</td></tr>
     <tr><td>session_id</td><td>会话 ID</td><td>sess-abc123</td></tr>
-    <tr><td>user_id</td><td>用户 ID</td><td>user-001</td></tr>
-    <tr><td>expert_id</td><td>专家 ID</td><td>expert-investment-analyst</td></tr>
+    <tr><td>user_id</td><td>用户 ID(多租户)</td><td>user-001</td></tr>
+    <tr><td>expert_id</td><td>专家(Subagent)ID</td><td>expert-investment-analyst</td></tr>
     <tr><td>skill_id</td><td>技能 ID(可选)</td><td>skill-financial-report-parser</td></tr>
     <tr><td>model_name</td><td>调用的模型</td><td>qwen2.5-72b</td></tr>
     <tr><td>tokens_in / tokens_out</td><td>输入输出 Token 数</td><td>1024 / 512</td></tr>
     <tr><td>tool_name</td><td>工具名(工具节点)</td><td>crm.opportunity.list</td></tr>
+    <tr><td>approval_mode</td><td>审批模式</td><td>ALWAYS / ONCE / NEVER</td></tr>
     <tr><td>status</td><td>执行状态</td><td>ok / error / timeout</td></tr>
     <tr><td>duration_ms</td><td>耗时</td><td>2380</td></tr>
   </tbody>
@@ -541,7 +626,7 @@ graph TB
 <div class="grid grid-cols-2">
   <div class="card"><div class="card-body">
     <h4>🔍 故障定位</h4>
-    <p class="text-sm text-secondary">通过 Jaeger 查看 Span 链路,快速定位慢节点与错误节点。如「记忆检索耗时 3s」可定位到 Milvus 索引问题。</p>
+    <p class="text-sm text-secondary">通过 LangFuse / ARMS 查看 Span 链路,快速定位慢节点与错误节点。如「记忆检索耗时 3s」可定位到 Milvus 索引问题。</p>
   </div></div>
   <div class="card"><div class="card-body">
     <h4>📊 性能优化</h4>
@@ -557,51 +642,47 @@ graph TB
   </div></div>
 </div>
 
-<h2>九、工作流编排示例</h2>
+<h2>九、工作流编排示例(Java)</h2>
 
 <div class="code-block">
   <div class="code-block__header">
-    <span>YAML - 尽调报告生成工作流(Expert Graph)</span>
+    <span>Java - 投资分析 Supervisor 多 Agent 工作流</span>
     <button class="code-block__copy">复制</button>
   </div>
-<pre><code><span class="token-property">name</span>: <span class="token-string">due-diligence-report</span>
-<span class="token-property">version</span>: <span class="token-string">2.2.0</span>
-<span class="token-property">expert</span>: <span class="token-string">investment-analyst</span>
+<pre><code><span class="token-comment">// 投资分析 Supervisor:财务分析 + 团队评估 Subagent 并行委派</span>
+<span class="token-keyword">import</span> io.agentscope.core.*;
+<span class="token-keyword">import</span> io.agentscope.harness.*;
+<span class="token-keyword">import</span> java.util.List;
 
-<span class="token-property">graph</span>:
-  <span class="token-property">nodes</span>:
-    - <span class="token-property">id</span>: <span class="token-string">extract</span>
-      <span class="token-property">type</span>: <span class="token-string">skill</span>
-      <span class="token-property">skill</span>: <span class="token-string">financial-report-parser</span>
-      <span class="token-property">inputs</span>: { <span class="token-property">document</span>: <span class="token-string">"$input.report"</span> }
+<span class="token-keyword">public class</span> <span class="token-property">InvestmentAnalystApp</span> {
 
-    - <span class="token-property">id</span>: <span class="token-string">legal_check</span>
-      <span class="token-property">type</span>: <span class="token-string">skill</span>
-      <span class="token-property">skill</span>: <span class="token-string">contract-review</span>
-      <span class="token-property">inputs</span>: { <span class="token-property">document</span>: <span class="token-string">"$input.contracts"</span> }
-      <span class="token-property">parallel</span>: <span class="token-keyword">true</span>
+    <span class="token-keyword">public</span> String <span class="token-function">analyze</span>(String company) {
+        <span class="token-comment">// 1. 构建 Supervisor,加载两个 Subagent spec</span>
+        <span class="token-keyword">var</span> supervisor = <span class="token-function">Supervisor</span>.<span class="token-function">builder</span>()
+            .<span class="token-function">name</span>(<span class="token-string">"investment-analyst"</span>)
+            .<span class="token-function">model</span>(<span class="token-keyword">new</span> <span class="token-property">QwenConfig</span>(<span class="token-string">"qwen-plus"</span>))
+            .<span class="token-function">subagents</span>(List.<span class="token-function">of</span>(
+                <span class="token-function">SubagentSpec</span>.<span class="token-function">fromMd</span>(<span class="token-string">"./subagents/financial-analyst.md"</span>),
+                <span class="token-function">SubagentSpec</span>.<span class="token-function">fromMd</span>(<span class="token-string">"./subagents/team-evaluator.md"</span>)
+            ))
+            .<span class="token-function">mode</span>(<span class="token-property">DelegationMode</span>.<span class="token-property">ASYNC</span>)  <span class="token-comment">// 并行委派</span>
+            .<span class="token-function">filesystem</span>(<span class="token-keyword">new</span> <span class="token-property">MinioFilesystemSpec</span>(<span class="token-string">"workspace/investment"</span>))
+            .<span class="token-function">session</span>(<span class="token-keyword">new</span> <span class="token-property">RedisSession</span>(jedisPool))
+            .<span class="token-function">build</span>();
 
-    - <span class="token-property">id</span>: <span class="token-string">industry_research</span>
-      <span class="token-property">type</span>: <span class="token-string">tool</span>
-      <span class="token-property">tool</span>: <span class="token-string">wind.industry.search</span>
-      <span class="token-property">inputs</span>: { <span class="token-property">industry</span>: <span class="token-string">"$input.industry"</span> }
-      <span class="token-property">parallel</span>: <span class="token-keyword">true</span>
+        <span class="token-comment">// 2. 异步非阻塞委派:财务 Subagent + 团队 Subagent 并行</span>
+        <span class="token-keyword">var</span> reportFlux = supervisor.<span class="token-function">stream</span>(
+            <span class="token-string">"分析 "</span> + company + <span class="token-string">",重点看财务和团队"</span>
+        );
 
-    - <span class="token-property">id</span>: <span class="token-string">merge</span>
-      <span class="token-property">type</span>: <span class="token-string">transformer</span>
-      <span class="token-property">inputs</span>: [<span class="token-string">"$extract.output"</span>, <span class="token-string">"$legal_check.output"</span>, <span class="token-string">"$industry_research.output"</span>]
+        <span class="token-comment">// 3. 流式输出 + Trace 自动上报 LangFuse</span>
+        <span class="token-keyword">var</span> report = <span class="token-keyword">new</span> <span class="token-property">StringBuilder</span>();
+        reportFlux.<span class="token-function">doOnNext</span>(report::<span class="token-function">append</span>)
+                  .<span class="token-function">subscribe</span>(chunk -&gt; System.out.<span class="token-function">print</span>(chunk));
 
-    - <span class="token-property">id</span>: <span class="token-string">report</span>
-      <span class="token-property">type</span>: <span class="token-string">chatmodel</span>
-      <span class="token-property">prompt</span>: <span class="token-string">./report_prompt.txt</span>
-      <span class="token-property">inputs</span>: { <span class="token-property">findings</span>: <span class="token-string">"$merge.output"</span> }
-      <span class="token-property">save_memory</span>: <span class="token-keyword">true</span>
-
-  <span class="token-property">edges</span>:
-    - { <span class="token-property">from</span>: <span class="token-string">extract</span>, <span class="token-property">to</span>: <span class="token-string">merge</span> }
-    - { <span class="token-property">from</span>: <span class="token-string">legal_check</span>, <span class="token-property">to</span>: <span class="token-string">merge</span> }
-    - { <span class="token-property">from</span>: <span class="token-string">industry_research</span>, <span class="token-property">to</span>: <span class="token-string">merge</span> }
-    - { <span class="token-property">from</span>: <span class="token-string">merge</span>, <span class="token-property">to</span>: <span class="token-string">report</span> }</code></pre>
+        <span class="token-keyword">return</span> report.<span class="token-function">toString</span>();
+    }
+}</code></pre>
 </div>
 
 <h2>十、性能优化策略</h2>
@@ -610,14 +691,14 @@ graph TB
   <summary><span>关键优化点</span></summary>
   <div class="collapse__body">
     <ul>
-      <li><strong>流式输出</strong>:LLM 生成即返回,降低 TTFT(首字节时间)&lt; 800ms</li>
-      <li><strong>并行执行</strong>:Graph 中无依赖节点自动并行(如法律扫描 + 行业研究 + 财报解析)</li>
+      <li><strong>响应式流式输出</strong>:Reactor Flux 端到端流式,降低 TTFT(首字节时间)&lt; 800ms</li>
+      <li><strong>异步非阻塞委派</strong>:Supervisor DelegationMode.ASYNC 让多个 Subagent 并行执行</li>
       <li><strong>工具缓存</strong>:相同输入的工具调用结果缓存(Redis,5 分钟 TTL)</li>
-      <li><strong>记忆预加载</strong>:会话开始时预加载相关记忆,避免推理时阻塞</li>
-      <li><strong>上下文压缩</strong>:长会话自动摘要历史,降低 Token 成本(超过 8K Token 触发压缩)</li>
+      <li><strong>记忆预加载</strong>:会话开始时预加载 MEMORY.md,避免推理时阻塞</li>
+      <li><strong>上下文压缩</strong>:长会话自动合并/压缩 MEMORY.md,降低 Token 成本(超过 8K Token 触发压缩)</li>
       <li><strong>模型分级</strong>:简单任务(意图识别、摘要)走小模型,复杂推理走大模型</li>
-      <li><strong>连接池复用</strong>:MCP Client 连接池复用,避免每次调用重建连接</li>
-      <li><strong>Goroutine 池</strong>:限制并发 Goroutine 数量,避免 OOM</li>
+      <li><strong>MCP 连接池</strong>:MCP Client 连接池复用,避免每次调用重建连接</li>
+      <li><strong>Workspace 快照</strong>:Redis Session + 对象存储快照,跨副本零停机滚动发布</li>
     </ul>
   </div>
 </details>
@@ -626,16 +707,16 @@ graph TB
 <div class="card">
   <div class="card-body">
     <ol>
-      <li><strong>请求接收</strong>:Session Service 接收用户请求,创建会话上下文</li>
-      <li><strong>专家加载</strong>:根据 expert_id 加载 Expert Graph 定义 + Persona + 资源绑定</li>
-      <li><strong>上下文组装</strong>:加载会话历史、用户偏好、项目记忆</li>
-      <li><strong>Graph 编译</strong>:Eino ADK 编译 Graph,生成可执行计划</li>
-      <li><strong>节点执行</strong>:按 Graph 拓扑顺序执行,自动并行化无依赖节点</li>
-      <li><strong>工具调用</strong>:ToolsNode 接收 LLM 决策,并行调用 MCP 工具</li>
-      <li><strong>模型推理</strong>:ChatModel 流式调用模型网关,Token 端到端回流</li>
-      <li><strong>记忆写入</strong>:异步提取本次会话关键信息写入长期记忆</li>
-      <li><strong>结果返回</strong>:流式 SSE 输出到前端,标注引用与来源</li>
-      <li><strong>审计记录</strong>:全程 Trace + 事件投递 NATS,审计服务消费落库</li>
+      <li><strong>请求接收</strong>:Kong/Higress 网关接收用户请求,JWT 鉴权 + 限流</li>
+      <li><strong>Session 加载</strong>:Session Service 通过 Redis Session + Workspace 快照恢复完整上下文</li>
+      <li><strong>专家加载</strong>:根据 expert_id 加载 Subagent Markdown spec + Persona + 资源绑定</li>
+      <li><strong>上下文组装</strong>:加载 MEMORY.md、用户偏好、项目记忆</li>
+      <li><strong>ReAct 推理</strong>:ReActAgent 进入 ReAct 循环(Reasoning + Tool Call)</li>
+      <li><strong>工具调用</strong>:@Tool + Toolkit 经 MCP Client 并行调用 MCP 工具,Permission 审批</li>
+      <li><strong>模型推理</strong>:Model 抽象流式调用模型网关,Token 端到端回流</li>
+      <li><strong>记忆写入</strong>:异步提取本次会话关键信息写入 MEMORY.md</li>
+      <li><strong>结果返回</strong>:Reactor Flux 流式 SSE 输出到前端,标注引用与来源</li>
+      <li><strong>Trace 上报</strong>:全程 OpenTelemetry Span 上报 LangFuse / ARMS,审计服务消费落库</li>
     </ol>
   </div>
 </div>

@@ -21,6 +21,8 @@
 - 智能体编排框架：`LangGraph` → **`Eino ADK`（字节跳动开源的 Go 智能体开发框架）**
 - 交付物范围：仅交付**静态文档站点 + 产品原型界面**，不交付 Automy 平台后端/前端实现代码。
 
+> **注（2026-07-23 更新）**：智能体编排框架选型已由 `Eino ADK` 替代为 **`AgentScope Java 2.0`**（阿里达摩院开源，JDK 17+ / Spring Boot 嵌入 / ReActAgent + HarnessAgent + 多 Agent / MCP+A2A 原生），以对齐团队 Java 技术栈。详见 change-id `migrate-to-agentscope-java-2`。本 spec 中所有"Eino ADK"表述以该新 spec 为准。
+
 ---
 
 ## 二、What Changes（变更概览）

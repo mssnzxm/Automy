@@ -16,7 +16,7 @@
 
 <p class="text-secondary">
   本章节是技术架构的纲领性文档,从战略层面定义 Automy 奥托迈平台的考核维度、核心实体关系、双系统架构形态、框架选型依据与企业级分布式能力。
-  所有后续章节(架构总览、系统设计、Eino ADK 运行时、记忆系统等)均围绕本目标展开,确保技术决策有据可依、演进方向一致。
+  所有后续章节(架构总览、系统设计、AgentScope Java 2.0 运行时、记忆系统等)均围绕本目标展开,确保技术决策有据可依、演进方向一致。
 </p>
 
 <div class="alert alert-info">
@@ -83,7 +83,7 @@
       </ul>
       <h4>关键手段</h4>
       <ul class="text-sm">
-        <li>Go 微服务 + gRPC 内部通信</li>
+        <li>Spring Boot 微服务 + gRPC 内部通信</li>
         <li>LLM 流式输出(SSE)+ KV Cache 复用</li>
         <li>无依赖步骤并行执行</li>
         <li>Redis 缓存热点上下文与工具结果</li>
@@ -528,24 +528,24 @@ graph LR
 
 <h2>四、架构选型与框架比较</h2>
 
-<p>在智能体框架选型上,Automy 团队重点考察了 DeerFlow 2、OpenHarness 以及 Eino ADK 三种方案,并结合 LangChain 生态与 Langfuse 可观测性进行综合评估。</p>
+<p>在智能体框架选型上,Automy 团队重点考察了 DeerFlow 2、OpenHarness 以及 AgentScope Java 2.0 三种方案,并结合 Spring 生态与 Langfuse 可观测性进行综合评估。</p>
 
 <p class="text-danger" style="font-weight: 600;">⚠ 范例仅演示用,并不代表最终选型,技术决策未充分讨论</p>
 
 <h3>1. 框架对比</h3>
 
 <table class="table">
-  <thead><tr><th>对比维度</th><th>DeerFlow 2</th><th>OpenHarness</th><th>Eino ADK(最终选型)</th></tr></thead>
+  <thead><tr><th>对比维度</th><th>DeerFlow 2</th><th>OpenHarness</th><th>AgentScope Java 2.0(最终选型)</th></tr></thead>
   <tbody>
-    <tr><td><strong>来源</strong></td><td>字节跳动开源研究框架</td><td>社区通用 Harness 抽象</td><td>字节跳动开源,CloudWeGo 生态</td></tr>
-    <tr><td><strong>语言</strong></td><td>Python</td><td>多语言抽象(Go / Python)</td><td>Go 原生</td></tr>
-    <tr><td><strong>编排方式</strong></td><td>声明式 Workflow</td><td>抽象接口,需自行实现</td><td>声明式 Chain / Graph</td></tr>
+    <tr><td><strong>来源</strong></td><td>字节跳动开源研究框架</td><td>社区通用 Harness 抽象</td><td>阿里达摩院开源,Spring 生态</td></tr>
+    <tr><td><strong>语言</strong></td><td>Python</td><td>多语言抽象(Go / Python)</td><td>Java 原生(JDK 17+)</td></tr>
+    <tr><td><strong>编排方式</strong></td><td>声明式 Workflow</td><td>抽象接口,需自行实现</td><td>ReActAgent + Supervisor 多 Agent</td></tr>
     <tr><td><strong>定位</strong></td><td>研究 / 深度任务</td><td>通用执行内核抽象</td><td>生产级 Agent 编排框架</td></tr>
-    <tr><td><strong>多 Agent 协同</strong></td><td>支持(任务分发)</td><td>需自行实现</td><td>原生支持(Graph 节点)</td></tr>
+    <tr><td><strong>多 Agent 协同</strong></td><td>支持(任务分发)</td><td>需自行实现</td><td>原生支持(Supervisor Leader-Worker)</td></tr>
     <tr><td><strong>流式输出</strong></td><td>支持</td><td>取决于实现</td><td>原生 SSE / 流式 Token</td></tr>
     <tr><td><strong>工具调用</strong></td><td>Function Calling</td><td>抽象接口</td><td>Function Calling + MCP 原生</td></tr>
-    <tr><td><strong>生态成熟度</strong></td><td>研究性强,LangChain 生态兼容好</td><td>概念抽象,实现分散</td><td>CloudWeGo 生产验证,字节内部规模化</td></tr>
-    <tr><td><strong>性能</strong></td><td>Python,中等</td><td>取决于实现</td><td>Go 原生,高性能</td></tr>
+    <tr><td><strong>生态成熟度</strong></td><td>研究性强,LangChain 生态兼容好</td><td>概念抽象,实现分散</td><td>Spring 生态融合,Nacos/Higress 配套</td></tr>
+    <tr><td><strong>性能</strong></td><td>Python,中等</td><td>取决于实现</td><td>Java 原生 + Reactor 响应式,高性能</td></tr>
     <tr><td><strong>可观测</strong></td><td>好(默认集成 Langfuse/LangSmith)</td><td>需自建</td><td>原生 OpenTelemetry</td></tr>
     <tr><td><strong>适用场景</strong></td><td>研究实验 / 复杂任务流</td><td>需要自定义 Harness 的团队</td><td>企业级生产场景</td></tr>
   </tbody>
@@ -566,7 +566,7 @@ quadrantChart
     quadrant-4 "生态优先"
     "DeerFlow 2": [0.68, 0.62]
     "OpenHarness": [0.4, 0.45]
-    "Eino ADK": [0.75, 0.85]
+    "AgentScope Java 2.0": [0.75, 0.85]
     </div>
   </div>
 </div>
@@ -576,17 +576,17 @@ quadrantChart
 <div class="alert alert-success">
   <div class="alert__icon">✅</div>
   <div class="alert__body">
-    <div class="alert__title">最终选型:Eino ADK 作为 Harness 框架实现</div>
-    <div class="alert__desc">Eino ADK 在生产就绪度、性能、生态成熟度上综合得分最高,作为 Automy 的 Harness 框架(Agent Runtime Kernel)实现</div>
+    <div class="alert__title">最终选型:AgentScope Java 2.0 作为 Harness 框架实现</div>
+    <div class="alert__desc">AgentScope Java 2.0 在生产就绪度、性能、生态成熟度上综合得分最高,作为 Automy 的 Harness 框架(Agent Runtime Kernel)实现</div>
   </div>
 </div>
 
 <table class="table">
   <thead><tr><th>选型理由</th><th>说明</th></tr></thead>
   <tbody>
-    <tr><td><strong>生产就绪</strong></td><td>字节跳动内部规模化验证,CloudWeGo 生态稳定,适合企业级场景</td></tr>
-    <tr><td><strong>性能优势</strong></td><td>Go 原生,单机万级 QPS,符合"效率"考核要素</td></tr>
-    <tr><td><strong>声明式编排</strong></td><td>Chain / Graph 编排直观,支持多 Agent 协同与复杂工作流</td></tr>
+    <tr><td><strong>生产就绪</strong></td><td>阿里达摩院开源,Spring 生态稳定,适合企业级场景</td></tr>
+    <tr><td><strong>性能优势</strong></td><td>Java 原生(JDK 17+) + Project Reactor 响应式非阻塞高并发,符合"效率"考核要素</td></tr>
+    <tr><td><strong>声明式编排</strong></td><td>ReActAgent + Supervisor 多 Agent 编排直观,支持复杂工作流</td></tr>
     <tr><td><strong>MCP 原生支持</strong></td><td>与 Automy 的 MCP 协议战略一致,无需额外封装</td></tr>
     <tr><td><strong>可观测原生</strong></td><td>内置 OpenTelemetry,与 Prometheus / Loki / Jaeger 一体化</td></tr>
   </tbody>
@@ -594,7 +594,7 @@ quadrantChart
 
 <h3>4. LangChain 生态集成</h3>
 
-<p>Eino ADK 虽然是 Go 框架,但 Automy 通过 gRPC Bridge 桥接 Python 生态,复用 LangChain 丰富的工具与 Chain 实现,避免重复造轮子。</p>
+<p>AgentScope Java 2.0 是 Java 原生框架,直接嵌入 Spring 生态,同时通过 MCP 协议桥接 Python 工具生态,复用 LangChain 丰富的工具与 Chain 实现,避免重复造轮子。</p>
 
 <div class="card">
   <div class="card-header">
@@ -604,9 +604,9 @@ quadrantChart
   <div class="card-body">
     <div class="mermaid">
 graph LR
-    subgraph "Go 运行时 (Eino ADK)"
-        ADK["Eino ADK Runtime"]
-        BR["gRPC Bridge<br/>Python Tool Proxy"]
+    subgraph "Java 运行时 (AgentScope Java 2.0)"
+        ADK["AgentScope Runtime"]
+        BR["MCP Bridge<br/>Python Tool Proxy"]
     end
 
     subgraph "Python 工具生态 (LangChain)"
@@ -621,7 +621,7 @@ graph LR
         OT["OpenTelemetry<br/>链路追踪"]
     end
 
-    ADK -->|gRPC 调用| BR
+    ADK -->|MCP 调用| BR
     BR -->|Python 进程| LC
     LC --> LT
     LC --> LG
@@ -637,7 +637,7 @@ graph LR
 <table class="table">
   <thead><tr><th>集成方式</th><th>用途</th><th>说明</th></tr></thead>
   <tbody>
-    <tr><td>gRPC Bridge</td><td>调用 Python 工具</td><td>Go 主进程通过 gRPC 调用 Python 子进程,复用 LangChain 工具生态</td></tr>
+    <tr><td>MCP Bridge</td><td>调用 Python 工具</td><td>Java 主进程通过 MCP 协议调用 Python 工具服务,复用 LangChain 工具生态</td></tr>
     <tr><td>LangChain Tools</td><td>500+ 现成工具</td><td>文档加载、Web 搜索、代码执行等,避免重复开发</td></tr>
     <tr><td>LangGraph</td><td>复杂状态机</td><td>部分复杂多 Agent 场景可借力 LangGraph 表达</td></tr>
     <tr><td>LangChain Community</td><td>第三方集成</td><td>各类 SaaS / 数据源连接器</td></tr>
@@ -653,7 +653,7 @@ graph LR
     <div class="mermaid">
 graph LR
     subgraph "Automy 运行时"
-        ADK["Eino ADK"]
+        ADK["AgentScope Runtime"]
         LLM["LLM 调用"]
         TOOL["工具调用"]
         MEM["记忆读写"]
@@ -866,8 +866,8 @@ sequenceDiagram
   <thead><tr><th>层级</th><th>组件</th><th>高可用方案</th><th>RTO / RPO</th></tr></thead>
   <tbody>
     <tr><td>接入层</td><td>Nginx / Kong</td><td>多实例 + 健康检查</td><td>RTO &lt; 30s · RPO = 0</td></tr>
-    <tr><td>应用层</td><td>Go 微服务</td><td>无状态 + 水平扩展 + 滚动更新</td><td>RTO &lt; 10s · RPO = 0</td></tr>
-    <tr><td>智能体运行时</td><td>Eino ADK</td><td>无状态 + 集群部署</td><td>RTO &lt; 10s · RPO = 0</td></tr>
+    <tr><td>应用层</td><td>Spring Boot 微服务</td><td>无状态 + 水平扩展 + 滚动更新</td><td>RTO &lt; 10s · RPO = 0</td></tr>
+    <tr><td>智能体运行时</td><td>AgentScope Java 2.0</td><td>无状态 + 集群部署</td><td>RTO &lt; 10s · RPO = 0</td></tr>
     <tr><td>关系数据库</td><td>PostgreSQL</td><td>主从复制 + Patroni 自动故障转移</td><td>RTO &lt; 60s · RPO &lt; 5s</td></tr>
     <tr><td>向量数据库</td><td>Milvus</td><td>分布式分片 + 副本</td><td>RTO &lt; 120s · RPO = 0</td></tr>
     <tr><td>缓存</td><td>Redis</td><td>哨兵 + 主从</td><td>RTO &lt; 30s · RPO &lt; 1s</td></tr>
@@ -895,7 +895,7 @@ sequenceDiagram
   <div class="alert__icon">🎯</div>
   <div class="alert__body">
     <div class="alert__title">架构目标小结</div>
-    <div class="alert__desc">考核四要素提供评判标尺 · 实体关系理清概念边界 · 双系统架构确保生产与运行解耦 · Eino ADK 选型兼顾性能与生态 · 分布式架构支撑企业级高可用与数据资产沉淀</div>
+    <div class="alert__desc">考核四要素提供评判标尺 · 实体关系理清概念边界 · 双系统架构确保生产与运行解耦 · AgentScope Java 2.0 选型兼顾性能与生态 · 分布式架构支撑企业级高可用与数据资产沉淀</div>
   </div>
 </div>
 

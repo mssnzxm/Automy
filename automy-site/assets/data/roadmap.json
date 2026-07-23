@@ -8,7 +8,7 @@
     "releaseDate": "2026-03-31",
     "description": "Automy 平台最小可行版本发布,完成智能体运行时、基础工作台与私有化部署能力。",
     "features": [
-      { "name": "智能体运行时(Eino ADK)", "status": "done", "priority": "P0" },
+      { "name": "智能体运行时(AgentScope Java 2.0)", "status": "done", "priority": "P0" },
       { "name": "工作台与会话管理", "status": "done", "priority": "P0" },
       { "name": "用户身份与权限(RBAC)", "status": "done", "priority": "P0" },
       { "name": "私有化部署能力", "status": "done", "priority": "P0" },
@@ -34,6 +34,22 @@
       { "name": "记忆审计与导出", "status": "planned", "priority": "P1" }
     ],
     "deliverables": ["v0.5 部署包", "记忆系统白皮书", "RAG 调优指南"]
+  },
+  {
+    "id": "milestone-q2-5-2026",
+    "quarter": "Q2.5 2026",
+    "title": "AgentScope Java 2.0 + Project Reactor 团队赋能",
+    "status": "planned",
+    "progress": 0,
+    "releaseDate": "2026-08-15",
+    "description": "面向团队的 AgentScope Java 2.0 框架与 Project Reactor 响应式编程赋能,沉淀 Spring Boot + AgentScope 集成最佳实践与关键路径文档,为 M3 市场与生态奠基(blocking M3)。",
+    "features": [
+      { "name": "AgentScope Java 2.0 框架学习", "status": "planned", "priority": "P1" },
+      { "name": "Project Reactor 响应式编程培训", "status": "planned", "priority": "P1" },
+      { "name": "Spring Boot + AgentScope 集成最佳实践", "status": "planned", "priority": "P1" },
+      { "name": "关键路径文档沉淀", "status": "planned", "priority": "P1" }
+    ],
+    "deliverables": ["团队培训材料", "集成最佳实践文档", "AgentScope 速查手册"]
   },
   {
     "id": "milestone-q3-2026",

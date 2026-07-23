@@ -59,12 +59,38 @@
 <h2>技术框架</h2>
 <div class="grid grid-cols-2">
   <div class="card"><div class="card-body">
-    <h4>ADK <span class="text-tertiary text-sm">Agent Development Kit</span></h4>
-    <p class="text-sm text-secondary">智能体开发工具包,提供声明式编排多步骤、多工具、多智能体协同工作流的能力。Automy 采用字节跳动开源的 Eino ADK。</p>
+    <h4>AgentScope Java 2.0</h4>
+    <p class="text-sm text-secondary" style="margin-bottom: 8px;">阿里达摩院开源的 Java(JDK 17+)企业级 Agent 框架,基于 Project Reactor 响应式,提供 ReActAgent 推理内核 + Harness 工程化层 + 多 Agent 编排,原生支持 MCP/A2A 协议。Automy 采用 AgentScope Java 2.0 作为智能体编排引擎。</p>
+    <div class="capability-tags"><span class="chip">框架</span><span class="chip">Java</span><span class="chip">阿里达摩院</span></div>
   </div></div>
   <div class="card"><div class="card-body">
-    <h4>Eino</h4>
-    <p class="text-sm text-secondary">字节跳动开源的 LLM 应用开发框架,提供智能体编排、记忆管理、工具调用等能力,支持可视化工作流。</p>
+    <h4>Eino <span class="text-tertiary text-sm">已废弃</span></h4>
+    <p class="text-sm text-secondary">字节跳动开源的 LLM 应用开发框架。已废弃,Automy 已迁移至 AgentScope Java 2.0,详见<a href="#/docs/architecture/agent-runtime">智能体运行时</a>章节。</p>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <h4>ReActAgent</h4>
+    <p class="text-sm text-secondary" style="margin-bottom: 8px;">AgentScope Java 2.0 的推理内核,基于 ReAct(Reasoning + Acting)循环 + Project Reactor 响应式流,实现自主规划与工具调用。</p>
+    <div class="capability-tags"><span class="chip">推理内核</span><span class="chip">ReAct</span></div>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <h4>Harness <span class="text-tertiary text-sm">工程化层</span></h4>
+    <p class="text-sm text-secondary" style="margin-bottom: 8px;">AgentScope Java 2.0 的企业级工程化底座,包含 Workspace / Session / Memory / Sandbox / Skill / Subagent 六大组件,通过 Hook 注入推理循环,不修改核心逻辑。</p>
+    <div class="capability-tags"><span class="chip">工程化</span><span class="chip">企业级</span></div>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <h4>Supervisor 多 Agent</h4>
+    <p class="text-sm text-secondary" style="margin-bottom: 8px;">AgentScope Java 2.0 的多 Agent 编排模式,Leader-Worker 架构,通过 Markdown spec 声明 Subagent,支持同步/异步委派,替代传统 DAG 图编排。</p>
+    <div class="capability-tags"><span class="chip">多 Agent</span><span class="chip">编排</span></div>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <h4>Workspace <span class="text-tertiary text-sm">工作空间</span></h4>
+    <p class="text-sm text-secondary" style="margin-bottom: 8px;">AgentScope Java 2.0 的结构化工作空间,作为 single source of truth,含 AGENTS.md / MEMORY.md / knowledge/ / skills/ / subagents/ 目录。</p>
+    <div class="capability-tags"><span class="chip">工作空间</span><span class="chip">SSOT</span></div>
+  </div></div>
+  <div class="card"><div class="card-body">
+    <h4>@Tool 注解</h4>
+    <p class="text-sm text-secondary" style="margin-bottom: 8px;">AgentScope Java 的工具定义方式,标记方法后框架自动生成 JSON Schema 注入提示,配合 Toolkit 统一管理本地工具与远端 MCP 工具。</p>
+    <div class="capability-tags"><span class="chip">工具</span><span class="chip">注解</span></div>
   </div></div>
   <div class="card"><div class="card-body">
     <h4>RAG <span class="text-tertiary text-sm">Retrieval-Augmented Generation</span></h4>
@@ -98,6 +124,11 @@
     </div>
   </div>
 </div></div>
+<div class="card"><div class="card-body">
+  <h4>A2A 协议 <span class="text-tertiary text-sm">Agent-to-Agent Protocol</span></h4>
+  <p class="text-sm text-secondary" style="margin-bottom: 8px;">Agent-to-Agent 协议,Agent 可注册到 Nacos,其他 Agent 可像调用微服务一样发现并委派任务,跨进程跨机调用。AgentScope Java 2.0 原生支持 A2A。</p>
+  <div class="capability-tags"><span class="chip">协议</span><span class="chip">Agent</span><span class="chip">Nacos</span></div>
+</div></div>
 
 <h2>安全合规</h2>
 <div class="grid grid-cols-2">
@@ -123,6 +154,7 @@
 <p>
   <a href="#/docs/requirements/overview" class="card-link">查看需求文档</a>
   <a href="#/docs/architecture/overview" class="card-link" style="margin-left: 16px;">查看技术架构</a>
+  <a href="#/docs/architecture/agent-runtime" class="card-link" style="margin-left: 16px;">查看智能体运行时</a>
   <a href="#/roadmap" class="card-link" style="margin-left: 16px;">查看路线图</a>
 </p>
 </body>

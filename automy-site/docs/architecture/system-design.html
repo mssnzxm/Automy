@@ -51,7 +51,7 @@ graph TB
         DOC["Doc Service\n文档服务"]
     end
     subgraph "智能体核心 Agent Core"
-        ADK["Eino ADK Runtime\n编排引擎"]
+        ADK["AgentScope Runtime\nReActAgent + HarnessAgent"]
         MEM["Memory Service\n记忆系统"]
         RAG["RAG Service\n知识检索"]
         TOOL["Tool Hub\n工具调用"]
@@ -128,7 +128,7 @@ graph TB
 </table>
 
 <h3>L4 应用服务层</h3>
-<p>业务逻辑编排层,采用 Go 微服务架构,每个服务独立部署,通过 gRPC 互相调用,通过 NATS 异步解耦。</p>
+<p>业务逻辑编排层,采用 Java(Spring Boot)微服务架构,每个服务独立部署,通过 gRPC/REST 互相调用,通过 NATS 异步解耦。</p>
 <ul>
   <li><strong>Session Service</strong>:会话创建、上下文维护、消息路由、SSE 长连接管理</li>
   <li><strong>Skill Engine</strong>:技能调度、参数校验(JSON Schema)、版本管理、执行编排</li>
@@ -139,13 +139,13 @@ graph TB
 </ul>
 
 <h3>L3 智能体核心层</h3>
-<p>Automy 的核心层,基于 Eino ADK 实现。详见 <a href="#/docs/architecture/agent-runtime">智能体运行时章节</a>。</p>
+<p>Automy 的核心层,基于 AgentScope Java 2.0 实现。详见 <a href="#/docs/architecture/agent-runtime">智能体运行时章节</a>。</p>
 <ul>
-  <li><strong>Eino ADK Runtime</strong>:工作流编排(Chain/Graph)、多 Agent 协同、步骤调度</li>
-  <li><strong>Memory Service</strong>:分层记忆(短期/工作/长期)、写入流水线、检索策略</li>
-  <li><strong>RAG Service</strong>:文档检索、混合检索(向量+关键词+元数据)、引用溯源</li>
-  <li><strong>Tool Hub</strong>:工具注册、Function Calling、结果缓存</li>
-  <li><strong>MCP Client</strong>:MCP 协议客户端、连接池、服务发现</li>
+  <li><strong>AgentScope Runtime</strong>:ReActAgent 推理内核 + HarnessAgent 工程化底座,Supervisor 多 Agent 编排,响应式流式调度</li>
+  <li><strong>Workspace</strong>:基于 AbstractFilesystem 的工作空间(本地/Docker/对象存储),按 sessionId/userId 隔离</li>
+  <li><strong>Memory</strong>:MEMORY.md 自动管理 + 自动合并/压缩,分层记忆(短期/工作/长期)</li>
+  <li><strong>RAG Service</strong>:knowledge/ + RAG 索引,混合检索(向量+关键词+元数据)、引用溯源</li>
+  <li><strong>MCP Hub</strong>:@Tool 注解 + Toolkit,对接 MCP Tool Hub,Nacos 服务发现</li>
 </ul>
 
 <h3>L2 数据与模型层</h3>
@@ -182,7 +182,7 @@ flowchart LR
     subgraph "同步通信 Sync"
         FE2["前端"] -->|REST + SSE| KONG2["Kong 网关"]
         KONG2 -->|REST| APP2["应用服务"]
-        APP2 -->|gRPC| ADK2["Eino ADK"]
+        APP2 -->|gRPC| ADK2["AgentScope Runtime"]
         ADK2 -->|gRPC| MEM2["Memory"]
         ADK2 -->|OpenAI API| MGW2["模型网关"]
     end
@@ -219,7 +219,7 @@ sequenceDiagram
     participant U as 用户
     participant K as Kong 网关
     participant S as Session Service
-    participant A as Eino ADK
+    participant A as AgentScope Runtime
     participant M as Memory
     participant R as RAG
     participant T as Tool Hub
@@ -331,7 +331,7 @@ sequenceDiagram
 graph LR
     U["用户提问"] --> K["Kong 网关\n鉴权+限流"]
     K --> S["Session Service\n会话上下文"]
-    S --> ADK["Eino ADK\nGraph 编排"]
+    S --> ADK["AgentScope\nSupervisor 编排"]
     ADK -->|检索| MEM["Memory\n长期记忆"]
     ADK -->|检索| RAG["RAG\n知识库"]
     ADK -->|调用| TOOL["Tool Hub\nMCP 工具"]
@@ -354,7 +354,7 @@ graph LR
   <tbody>
     <tr><td>1. 接入</td><td>Kong JWT 校验、限流配额、路由到 Session Service</td><td>Redis(限流计数)</td></tr>
     <tr><td>2. 上下文加载</td><td>Session Service 加载会话历史、用户偏好</td><td>PostgreSQL + Redis</td></tr>
-    <tr><td>3. 记忆检索</td><td>ADK 调用 Memory Service 检索 Top-K 相关记忆</td><td>Milvus + PostgreSQL</td></tr>
+    <tr><td>3. 记忆检索</td><td>AgentScope Runtime 调用 Memory Service 检索 Top-K 相关记忆</td><td>Milvus + PostgreSQL</td></tr>
     <tr><td>4. 知识检索</td><td>若涉及企业文档,触发 RAG 检索混合召回</td><td>Milvus + MinIO</td></tr>
     <tr><td>5. 工具调用</td><td>Function Calling 调用 MCP 工具(如 CRM 查询)</td><td>外部企业系统</td></tr>
     <tr><td>6. 模型推理</td><td>Model Gateway 路由到 vLLM,流式返回 Token</td><td>GPU 推理池</td></tr>
@@ -397,7 +397,7 @@ graph LR
     <tr><td>Expert Engine</td><td>专家配置、Persona、订阅</td><td>PostgreSQL, Agent Runtime</td><td>REST + gRPC</td></tr>
     <tr><td>Doc Service</td><td>文档上传、解析任务、分块</td><td>MinIO, NATS, Milvus</td><td>REST</td></tr>
     <tr><td>Audit Service</td><td>审计事件消费、签名链、归档</td><td>NATS, PostgreSQL, MinIO</td><td>gRPC(内部)</td></tr>
-    <tr><td>Agent Runtime</td><td>Eino ADK 编排、工具调用</td><td>Memory, RAG, Tool Hub, Model Gateway</td><td>gRPC(流式)</td></tr>
+    <tr><td>Agent Runtime</td><td>AgentScope ReActAgent + HarnessAgent 编排、@Tool 工具调用</td><td>Memory, RAG, Tool Hub, Model Gateway</td><td>gRPC(流式)</td></tr>
     <tr><td>Memory Service</td><td>分层记忆读写、检索</td><td>Milvus, PostgreSQL, Redis</td><td>gRPC(内部)</td></tr>
     <tr><td>RAG Service</td><td>混合检索、引用溯源</td><td>Milvus, MinIO, PostgreSQL</td><td>gRPC(内部)</td></tr>
     <tr><td>Model Gateway</td><td>多模型路由、降级、配额</td><td>vLLM, Redis</td><td>OpenAI 兼容 HTTP</td></tr>
@@ -406,7 +406,7 @@ graph LR
 </table>
 
 <h2>下一章</h2>
-<p><a href="#/docs/architecture/agent-runtime" class="card-link">智能体运行时(Eino ADK)→</a></p>
+<p><a href="#/docs/architecture/agent-runtime" class="card-link">智能体运行时(AgentScope Java 2.0)→</a></p>
 
 <script>
   (function() {

@@ -8,20 +8,60 @@
     "tags": ["AI", "智能体"]
   },
   {
-    "term": "ADK",
-    "termEn": "Agent Development Kit",
+    "term": "AgentScope Java 2.0",
+    "termEn": "AgentScope Java 2.0",
     "category": "技术框架",
-    "definition": "智能体开发工具包,提供声明式编排多步骤、多工具、多智能体协同工作流的能力。Automy 采用字节跳动开源的 Eino ADK。",
-    "related": ["Eino", "Agent", "Workflow"],
-    "tags": ["框架", "开源"]
+    "definition": "阿里达摩院开源的 Java(JDK 17+)企业级 Agent 框架,基于 Project Reactor 响应式,提供 ReActAgent 推理内核 + Harness 工程化层 + 多 Agent 编排,原生支持 MCP/A2A 协议。Automy 采用 AgentScope Java 2.0 作为智能体编排引擎。",
+    "related": ["ReActAgent", "Harness", "Supervisor 多 Agent", "MCP", "A2A 协议"],
+    "tags": ["框架", "开源", "阿里达摩院", "Java"]
   },
   {
     "term": "Eino",
     "termEn": "Eino",
     "category": "技术框架",
-    "definition": "字节跳动开源的 LLM 应用开发框架,提供智能体编排、记忆管理、工具调用等能力,支持可视化工作流。",
-    "related": ["ADK", "Agent"],
-    "tags": ["框架", "开源", "字节跳动"]
+    "definition": "字节跳动开源的 LLM 应用开发框架。已废弃,Automy 已迁移至 AgentScope Java 2.0,详见智能体运行时章节。",
+    "related": ["AgentScope Java 2.0"],
+    "tags": ["框架", "已废弃"]
+  },
+  {
+    "term": "ReActAgent",
+    "termEn": "ReActAgent",
+    "category": "技术框架",
+    "definition": "AgentScope Java 2.0 的推理内核,基于 ReAct(Reasoning + Acting)循环 + Project Reactor 响应式流,实现自主规划与工具调用。Automy 用 ReActAgent 承担意图识别、工具决策与推理生成。",
+    "related": ["AgentScope Java 2.0", "Harness", "Tool Calling"],
+    "tags": ["推理内核", "ReAct", "响应式"]
+  },
+  {
+    "term": "Harness",
+    "termEn": "Harness",
+    "category": "技术框架",
+    "definition": "AgentScope Java 2.0 的企业级工程化底座,包含 Workspace / Session / Memory / Sandbox / Skill / Subagent 六大组件,通过 Hook 注入推理循环,不修改核心逻辑。",
+    "related": ["AgentScope Java 2.0", "Workspace", "Session", "Long-term Memory"],
+    "tags": ["工程化", "底座", "企业级"]
+  },
+  {
+    "term": "Supervisor 多 Agent",
+    "termEn": "Supervisor Multi-Agent",
+    "category": "技术框架",
+    "definition": "AgentScope Java 2.0 的多 Agent 编排模式,Leader-Worker 架构,通过 Markdown spec 声明 Subagent,支持同步(SYNC)/异步(ASYNC)委派,替代传统 DAG 图编排。",
+    "related": ["AgentScope Java 2.0", "ReActAgent", "Expert Agent"],
+    "tags": ["多 Agent", "编排", "Leader-Worker"]
+  },
+  {
+    "term": "Workspace",
+    "termEn": "Workspace",
+    "category": "技术框架",
+    "definition": "AgentScope Java 2.0 的结构化工作空间,作为 single source of truth,含 AGENTS.md / MEMORY.md / knowledge/ / skills/ / subagents/ 目录,基于 AbstractFilesystem 统一抽象。",
+    "related": ["Harness", "Long-term Memory", "Skill"],
+    "tags": ["工作空间", "SSOT", "文件系统"]
+  },
+  {
+    "term": "@Tool 注解",
+    "termEn": "@Tool Annotation",
+    "category": "技术框架",
+    "definition": "AgentScope Java 的工具定义方式,标记方法后框架自动生成 JSON Schema 注入提示,配合 Toolkit 统一管理本地工具与远端 MCP 工具。",
+    "related": ["AgentScope Java 2.0", "Tool Calling", "MCP"],
+    "tags": ["工具", "注解", "JSON Schema"]
   },
   {
     "term": "MCP",
@@ -30,6 +70,14 @@
     "definition": "模型上下文协议,由 Anthropic 主导的开放标准,定义 LLM 应用如何与外部数据源、工具、服务交互。Automy 通过 MCP 接入企业系统。",
     "related": ["Tool", "Service", "Anthropic"],
     "tags": ["协议", "标准", "Anthropic"]
+  },
+  {
+    "term": "A2A 协议",
+    "termEn": "Agent-to-Agent Protocol",
+    "category": "协议标准",
+    "definition": "Agent-to-Agent 协议,Agent 可注册到 Nacos,其他 Agent 可像调用微服务一样发现并委派任务,跨进程跨机调用。AgentScope Java 2.0 原生支持 A2A。",
+    "related": ["AgentScope Java 2.0", "Supervisor 多 Agent", "MCP"],
+    "tags": ["协议", "Agent", "Nacos"]
   },
   {
     "term": "RAG",
@@ -67,7 +115,7 @@
     "term": "Long-term Memory",
     "termEn": "Long-term Memory",
     "category": "核心概念",
-    "definition": "长期记忆,跨会话持久化的用户偏好、项目上下文、决策记录等。让 Agent 真正"记住"用户,提供个性化服务。",
+    "definition": "长期记忆,跨会话持久化的用户偏好、项目上下文、决策记录等。让 Agent 真正“记住”用户,提供个性化服务。",
     "related": ["Memory", "Session"],
     "tags": ["记忆", "持久化", "个性化"]
   },
@@ -132,7 +180,7 @@
     "termEn": "Workflow",
     "category": "技术方法",
     "definition": "工作流,将复杂任务分解为多个有序步骤,每步可调用不同 Agent、技能或工具,支持条件分支与循环。",
-    "related": ["ADK", "Agent"],
+    "related": ["AgentScope Java 2.0", "Agent"],
     "tags": ["工作流", "编排"]
   },
   {

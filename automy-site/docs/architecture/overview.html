@@ -17,7 +17,7 @@
 <p class="text-secondary">
   Automy 奥托迈是面向投资公司的企业级智能体平台,采用分层解耦、标准协议、私有可控的架构理念。
   本章节是技术架构的入口,系统性地介绍整体设计原则、五层架构全景、技术栈选型与部署形态,
-  为后续各章节(系统设计、Eino ADK 运行时、记忆系统、知识库、MCP 协议等)提供宏观视角。
+  为后续各章节(系统设计、AgentScope 运行时、记忆系统、知识库、MCP 协议等)提供宏观视角。
 </p>
 
 <div class="alert alert-info">
@@ -85,8 +85,8 @@ graph TB
         B4["审计服务 Audit"]
         B5["通知服务 Notification"]
     end
-    subgraph "L3 智能体核心 Agent Core (Eino ADK)"
-        C1["Eino ADK 运行时<br/>Chain / Graph"]
+    subgraph "L3 智能体核心 Agent Core (AgentScope)"
+        C1["AgentScope 运行时\nReActAgent + HarnessAgent"]
         C2["记忆系统 Memory"]
         C3["知识库 RAG"]
         C4["工具调用 Tool Calling"]
@@ -150,13 +150,13 @@ graph TB
       <td><strong>L4 应用服务层</strong></td>
       <td>业务逻辑编排、会话路由、技能调度</td>
       <td>会话、技能、专家、审计、通知服务</td>
-      <td>Go (Gin/Echo) 微服务 + gRPC</td>
+      <td>Java (Spring Boot) 微服务 + gRPC/REST</td>
     </tr>
     <tr>
       <td><strong>L3 智能体核心</strong></td>
       <td>Agent 运行时与能力中枢</td>
-      <td>Eino ADK、记忆、RAG、工具调用、MCP</td>
-      <td>Eino ADK · MCP SDK</td>
+      <td>AgentScope、记忆、RAG、工具调用、MCP</td>
+      <td>AgentScope Java 2.0 · MCP SDK</td>
     </tr>
     <tr>
       <td><strong>L2 数据与模型层</strong></td>
@@ -182,8 +182,8 @@ graph TB
   <tbody>
     <tr><td><strong>前端 Web</strong></td><td>React + Vite + Tailwind + shadcn/ui</td><td>组件化开发,Vite 极速构建,shadcn/ui 提供企业级 UI</td></tr>
     <tr><td><strong>桌面端</strong></td><td>Electron</td><td>跨平台桌面应用,支持 Windows / macOS / Linux</td></tr>
-    <tr><td><strong>后端服务</strong></td><td>Go (Gin / Echo)</td><td>高性能、低内存,适合微服务与高并发场景</td></tr>
-    <tr><td><strong>Agent 框架</strong></td><td>Eino ADK</td><td>字节跳动开源,Go 原生,声明式 Chain/Graph 编排</td></tr>
+    <tr><td><strong>后端服务</strong></td><td>Java (Spring Boot + Spring Cloud + Nacos)</td><td>对齐团队 Java 技术栈,生态成熟,微服务与高并发场景适用</td></tr>
+    <tr><td><strong>Agent 框架</strong></td><td>AgentScope Java 2.0</td><td>阿里达摩院开源,JDK 17+ 原生,ReActAgent + HarnessAgent + 多 Agent,MCP/A2A 原生</td></tr>
     <tr><td><strong>模型网关</strong></td><td>自研 + LiteLLM</td><td>统一 OpenAI 兼容接口,多模型路由、降级、配额</td></tr>
     <tr><td><strong>LLM 推理</strong></td><td>vLLM / TGI</td><td>私有化部署,Qwen / DeepSeek / GLM 系列模型</td></tr>
     <tr><td><strong>向量数据库</strong></td><td>Milvus 2.x</td><td>分布式、十亿级向量、HNSW/IVF 索引</td></tr>
@@ -207,7 +207,7 @@ graph TB
   <div class="card"><div class="card-body">
     <h4>⚡ 高性能</h4>
     <ul class="text-sm">
-      <li>Go 后端,单机万级 QPS</li>
+      <li>Java 后端,Reactor 响应式高并发</li>
       <li>LLM 流式输出,TTFT &lt; 800ms</li>
       <li>无依赖步骤并行执行</li>
       <li>工具调用结果缓存</li>
@@ -281,15 +281,16 @@ graph TB
 <h2>六、关键设计决策</h2>
 
 <details class="collapse" open>
-  <summary><span>1. 为什么选择 Eino ADK 而非 LangChain / LangGraph?</span></summary>
+  <summary><span>1. 为什么选择 AgentScope Java 2.0 而非 LangGraph / 其他框架?</span></summary>
   <div class="collapse__body">
-    <p>Eino 是字节跳动开源的 LLM 应用框架,选择它的核心理由:</p>
+    <p>AgentScope Java 2.0 是阿里达摩院开源的企业级 Agent 框架(JDK 17+、Apache-2.0、基于 Project Reactor),选择它的核心理由:</p>
     <ul>
-      <li><strong>Go 原生</strong>:与 Automy 后端技术栈统一,避免 Python 桥接开销,Goroutine 并发模型适合高负载 Agent 调度</li>
-      <li><strong>声明式编排</strong>:Chain/Graph 抽象清晰,支持分支、并行、循环,适合复杂业务工作流</li>
-      <li><strong>组件化拼装</strong>:ChatModel / Tool / Memory / Retriever 标准接口,组件可独立替换</li>
-      <li><strong>企业级稳定</strong>:字节内部大规模验证,代码质量与文档完整度高</li>
-      <li><strong>国产可控</strong>:符合国产化要求,中文社区支持好</li>
+      <li><strong>Java 原生</strong>:对齐团队 Java 技术栈与 Spring Boot 微服务体系,无需引入 Go / Python 桥接,工具链与 CI/CD 复用既有体系</li>
+      <li><strong>Harness 工程化内置</strong>:Workspace / Session / Memory / Sandbox / Skill / Subagent 开箱即用,降低企业级分布式落地成本</li>
+      <li><strong>多 Agent 编排</strong>:Supervisor(Leader-Worker)+ Markdown spec 声明 Subagent,替代传统 DAG 图编排,适合复杂业务工作流</li>
+      <li><strong>MCP + A2A 原生</strong>:对齐 Automy MCP 集成层,A2A 支持跨进程跨机多 Agent 协同</li>
+      <li><strong>响应式高并发</strong>:基于 Project Reactor 非阻塞流,支撑高负载 Agent 调度与端到端流式输出</li>
+      <li><strong>国产可控</strong>:阿里达摩院主导,中文社区支持好,符合国产化要求</li>
     </ul>
     <p>详细对比见 <a href="#/docs/architecture/agent-runtime">智能体运行时章节</a>。</p>
   </div>
@@ -357,7 +358,7 @@ graph TB
         <tr>
           <td>性能 vs 灵活性</td>
           <td>偏向灵活性</td>
-          <td>Eino ADK Graph 声明式编排带来运行时解析开销,但换取了技能/专家的可视化编排与动态加载能力</td>
+          <td>AgentScope Supervisor 多 Agent 编排 + Reactor 响应式带来调度开销,但换取了技能/专家的并行委派与可视化编排能力</td>
         </tr>
         <tr>
           <td>一致性 vs 可用性</td>
@@ -372,7 +373,7 @@ graph TB
         <tr>
           <td>生态 vs 可控</td>
           <td>国产可控优先</td>
-          <td>选择 Eino ADK 而非 LangChain,生态略小但国产化、Go 技术栈统一</td>
+          <td>选择 AgentScope 而非 LangGraph,生态较新但 Java 技术栈对齐 + Spring 生态原生融合</td>
         </tr>
       </tbody>
     </table>
@@ -386,8 +387,8 @@ graph TB
     <p class="text-sm text-secondary">分层架构的详细设计与模块划分、通信协议</p>
   </div></a>
   <a href="#/docs/architecture/agent-runtime" class="card card-hover-lift"><div class="card-body">
-    <h4>2. 智能体运行时(Eino ADK) →</h4>
-    <p class="text-sm text-secondary">核心章节:Eino ADK 编排引擎、组件、时序、对比</p>
+    <h4>2. 智能体运行时(AgentScope) →</h4>
+    <p class="text-sm text-secondary">核心章节:AgentScope 编排引擎、组件、时序、对比</p>
   </div></a>
   <a href="#/docs/architecture/memory-system" class="card card-hover-lift"><div class="card-body">
     <h4>3. 记忆系统设计 →</h4>

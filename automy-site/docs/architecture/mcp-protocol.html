@@ -68,7 +68,7 @@ graph TB
 
 <h2>二、Automy MCP 接入架构</h2>
 
-<p>Automy 在 Agent Runtime(Eino ADK)与外部 MCP Server 之间,增设 <strong>MCP Gateway</strong> 中间层,
+<p>Automy 在 Agent Runtime(AgentScope Java 2.0)与外部 MCP Server 之间,增设 <strong>MCP Gateway</strong> 中间层,
 统一处理连接池、鉴权、限流、审计、脱敏、服务发现,使 Agent 侧无需关心后端实现细节。</p>
 
 <div class="card">
@@ -80,7 +80,7 @@ graph TB
     <div class="mermaid">
 graph TB
     subgraph L1["1. Agent Runtime 层"]
-        A1["Eino ADK Agent"]
+        A1["AgentScope ReActAgent"]
         A2["Tool Calls<br/>(由 LLM 决策)"]
     end
     subgraph L2["2. MCP Gateway 层"]
@@ -137,7 +137,7 @@ graph TB
 sequenceDiagram
     autonumber
     participant U as 用户
-    participant A as Agent(Eino ADK)
+    participant A as Agent(AgentScope ReActAgent)
     participant G as MCP Gateway
     participant R as Service Registry
     participant S as MCP Server(CRM)
@@ -161,67 +161,109 @@ sequenceDiagram
 
 <h2>五、Adapter 框架(快速接入新系统)</h2>
 
-<p>Automy 提供 <strong>MCP Adapter SDK</strong>,开发者只需实现少量接口即可把企业系统接入 MCP 协议。
-SDK 已封装协议层、连接管理、schema 生成、错误处理。</p>
+<p>Automy 基于 AgentScope Java 2.0 提供 <strong>MCP Adapter 框架</strong>:通过 <code>@Tool</code> 注解 + Toolkit 自动生成 JSON Schema 注入提示词,
+并由 AgentScope 原生 MCP 客户端连接任意 MCP 兼容服务器(文件系统/数据库/浏览器/代码解释器等)。
+开发者只需标注少量注解即可把企业系统接入 MCP 协议,框架已封装协议层、连接管理、schema 生成、错误处理。</p>
 
 <div class="card">
   <div class="card-body">
     <div class="code-block">
       <div class="code-block__header">
-        <span>Python - CRM MCP Server(完整示例)</span>
+        <span>Java - @Tool 注解 + Toolkit + MCP 客户端(完整示例)</span>
         <button class="code-block__copy">复制</button>
       </div>
-<pre><code><span class="token-keyword">from</span> mcp <span class="token-keyword">import</span> MCPServer, tool, resource
-<span class="token-keyword">from</span> automy.mcp.adapter <span class="token-keyword">import</span> AutomyAdapter
-
-<span class="token-comment"># 1. 创建 Server,继承 AutomyAdapter 自动获得鉴权/审计/限流</span>
-server = <span class="token-function">MCPServer</span>(<span class="token-string">"crm-system"</span>, adapter=<span class="token-function">AutomyAdapter</span>())
-
-<span class="token-comment"># 2. 暴露 Resource:客户详情(只读)</span>
-@server.<span class="token-function">resource</span>(<span class="token-string">"customer://{customer_id}"</span>)
-<span class="token-keyword">async def</span> <span class="token-function">get_customer</span>(customer_id: <span class="token-property">str</span>):
-    <span class="token-string">"""获取客户详情"""</span>
-    customer = <span class="token-keyword">await</span> crm.<span class="token-function">get_customer</span>(customer_id)
-    <span class="token-keyword">return</span> {
-        <span class="token-property">"id"</span>: customer.id,
-        <span class="token-property">"name"</span>: customer.name,
-        <span class="token-property">"size"</span>: customer.size,
-        <span class="token-property">"contracts"</span>: customer.contracts
+<pre><code><span class="token-comment">// 1. 用 @Tool 注解标记方法,框架自动生成 JSON Schema 注入提示词</span>
+<span class="token-keyword">public class</span> <span class="token-property">CrmTools</span> {
+    <span class="token-property">@Tool</span>(description = <span class="token-string">"搜索客户"</span>)
+    <span class="token-keyword">public</span> List&lt;Customer&gt; <span class="token-function">searchCustomer</span>(
+        <span class="token-property">@Param</span>(<span class="token-string">"name"</span>) String name
+    ) {
+        <span class="token-keyword">return</span> crmClient.<span class="token-function">searchByName</span>(name);
     }
 
-<span class="token-comment"># 3. 暴露 Tool:查询商机(带副作用,需审计)</span>
-@server.<span class="token-function">tool</span>(
-    <span class="token-property">name</span>=<span class="token-string">"crm.opportunity.list"</span>,
-    <span class="token-property">description</span>=<span class="token-string">"列出商机,支持金额/日期过滤"</span>,
-    <span class="token-property">audit</span>=<span class="token-keyword">True</span>,
-    <span class="token-property">rate_limit</span>={<span class="token-property">"qps"</span>: <span class="token-number">10</span>, <span class="token-property">"daily"</span>: <span class="token-number">1000</span>}
-)
-<span class="token-keyword">async def</span> <span class="token-function">list_opportunities</span>(
-    <span class="token-property">min_amount</span>: <span class="token-property">float</span> = <span class="token-number">0</span>,
-    <span class="token-property">date_from</span>: <span class="token-property">str</span> = <span class="token-keyword">None</span>,
-    <span class="token-property">date_to</span>: <span class="token-property">str</span> = <span class="token-keyword">None</span>
-):
-    <span class="token-string">"""列出商机
+    <span class="token-property">@Tool</span>(description = <span class="token-string">"列出商机,支持金额/日期过滤"</span>)
+    <span class="token-keyword">public</span> List&lt;Opportunity&gt; <span class="token-function">listOpportunities</span>(
+        <span class="token-property">@Param</span>(<span class="token-string">"minAmount"</span>) <span class="token-keyword">double</span> minAmount,
+        <span class="token-property">@Param</span>(<span class="token-string">"dateFrom"</span>) String dateFrom,
+        <span class="token-property">@Param</span>(<span class="token-string">"dateTo"</span>) String dateTo
+    ) {
+        <span class="token-keyword">return</span> crmClient.<span class="token-function">queryOpportunities</span>(minAmount, dateFrom, dateTo);
+    }
+}
 
-    Args:
-        min_amount: 最小金额(万元)
-        date_from: 开始日期 YYYY-MM-DD
-        date_to: 结束日期 YYYY-MM-DD
-    """</span>
-    opportunities = <span class="token-keyword">await</span> crm.<span class="token-function">query_opportunities</span>(
-        <span class="token-property">min_amount</span>=min_amount * <span class="token-number">10000</span>,
-        <span class="token-property">date_from</span>=date_from,
-        <span class="token-property">date_to</span>=date_to
-    )
-    <span class="token-keyword">return</span> [<span class="token-function">to_dict</span>(o) <span class="token-keyword">for</span> o <span class="token-keyword">in</span> opportunities]
+<span class="token-comment">// 2. 封装为 Toolkit,框架自动生成 JSON Schema</span>
+<span class="token-keyword">var</span> toolkit = <span class="token-function">Toolkit</span>.<span class="token-function">of</span>(<span class="token-keyword">new</span> <span class="token-property">CrmTools</span>());
 
-<span class="token-keyword">if</span> __name__ == <span class="token-string">"__main__"</span>:
-    server.<span class="token-function">run</span>(<span class="token-property">transport</span>=<span class="token-string">"sse"</span>, <span class="token-property">host</span>=<span class="token-string">"0.0.0.0"</span>, <span class="token-property">port</span>=<span class="token-number">8080</span>)</code></pre>
+<span class="token-comment">// 3. AgentScope 原生 MCP 客户端连接远端 MCP 服务器</span>
+<span class="token-keyword">var</span> mcpClient = <span class="token-function">McpClient</span>.<span class="token-function">builder</span>()
+    .<span class="token-function">endpoint</span>(<span class="token-string">"sse://crm-mcp.automy.internal:8080"</span>)
+    .<span class="token-function">auth</span>(userToken)
+    .<span class="token-function">build</span>();
+<span class="token-keyword">var</span> mcpToolkit = mcpClient.<span class="token-function">asToolkit</span>();  <span class="token-comment">// 远端 MCP 工具自动转 Toolkit</span>
+
+<span class="token-comment">// 4. 注册到 ReActAgent,LLM 自主决策调用本地/远端工具</span>
+<span class="token-keyword">var</span> agent = <span class="token-function">ReActAgent</span>.<span class="token-function">builder</span>()
+    .<span class="token-function">model</span>(<span class="token-keyword">new</span> <span class="token-property">QwenConfig</span>(<span class="token-string">"qwen-plus"</span>))
+    .<span class="token-function">tools</span>(List.<span class="token-function">of</span>(toolkit, mcpToolkit))
+    .<span class="token-function">build</span>();</code></pre>
     </div>
   </div>
 </div>
 
-<h2>六、MCP 服务目录</h2>
+<h2>六、A2A 协议与 MCP 双层协作</h2>
+
+<p>AgentScope Java 2.0 原生支持 <strong>A2A(Agent-to-Agent)协议</strong>,允许 Agent 注册到 Nacos 服务注册中心,
+其他 Agent 可像调用微服务一样发现并委派任务,实现跨进程、跨机器的 Agent 协同。在 Automy 的 MCP 集成层中,
+A2A 与 MCP 形成<strong>双层协作模型</strong>:</p>
+
+<ul>
+  <li><strong>工具调用层(MCP)</strong>:Agent 通过 MCP 协议调用外部系统工具(CRM/Wind/Mail 等),面向「原子能力」</li>
+  <li><strong>Agent 委派层(A2A)</strong>:Agent 通过 A2A 协议委派任务给其他 Agent(如投研 Subagent、法务 Subagent),面向「领域专家」</li>
+</ul>
+
+<p>此外,<strong>Higress AI 网关</strong>可作为 MCP 代理网关统一收口:对外暴露统一 MCP 端点,对内做鉴权、限流、审计、协议转换,
+使企业内多个 MCP Server 经 Higress 收口后对外呈现为单一入口,与既有 Spring Cloud / Nacos 体系无缝融合。</p>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">MCP + A2A 双层协作模型</span>
+    <span class="badge badge-primary">Mermaid</span>
+  </div>
+  <div class="card-body">
+    <div class="mermaid">
+graph TB
+    subgraph AGENT ["AgentScope Agent 层"]
+        R["ReActAgent\n推理 + 工具决策"]
+        SUP["Supervisor\n多 Agent 编排"]
+    end
+    subgraph A2ALAYER ["A2A 委派层(Nacos 注册)"]
+        SUB1["投研 Subagent"]
+        SUB2["法务 Subagent"]
+    end
+    subgraph HIG ["Higress MCP 代理网关"]
+        HG["统一鉴权/限流/审计\n协议转换"]
+    end
+    subgraph MCPLAYER ["MCP 工具层"]
+        M1["CRM MCP"]
+        M2["Wind MCP"]
+        M3["Mail MCP"]
+    end
+    SUP -->|"A2A 委派任务"| SUB1
+    SUP -->|"A2A 委派任务"| SUB2
+    R -->|"MCP 工具调用"| HG
+    SUB1 -->|"MCP 工具调用"| HG
+    SUB2 -->|"MCP 工具调用"| HG
+    HG --> M1
+    HG --> M2
+    HG --> M3
+    style A2ALAYER fill:#E0F2FE,stroke:#0284C7
+    style HIG fill:#FEF3C7,stroke:#D97706
+    style MCPLAYER fill:#D1FAE5,stroke:#059669
+    </div>
+  </div>
+</div>
+
+<h2>七、MCP 服务目录</h2>
 
 <p>Automy 内置 8 个官方 MCP 服务,覆盖投资公司主流业务系统。所有服务在 Service Registry 注册,Agent 启动时自动发现可用工具。</p>
 
@@ -239,7 +281,7 @@ server = <span class="token-function">MCPServer</span>(<span class="token-string
   </tbody>
 </table>
 
-<h2>七、限流配额设计</h2>
+<h2>八、限流配额设计</h2>
 
 <p>投资公司场景下,不同后端系统对调用频率的承受力差异巨大(如 Wind 接口按调用计费,CRM 限并发)。
 Automy 设计<strong>三维限流配额</strong>模型。</p>
@@ -280,7 +322,7 @@ graph TB
   </tbody>
 </table>
 
-<h2>八、认证与凭证管理</h2>
+<h2>九、认证与凭证管理</h2>
 
 <table class="table">
   <thead><tr><th>认证方式</th><th>典型场景</th><th>凭证存储</th><th>刷新机制</th></tr></thead>
@@ -293,7 +335,7 @@ graph TB
   </tbody>
 </table>
 
-<h2>九、安全治理</h2>
+<h2>十、安全治理</h2>
 
 <div class="grid grid-cols-2">
   <div class="card">
@@ -320,7 +362,7 @@ graph TB
   </div>
 </div>
 
-<h2>十、可靠性设计</h2>
+<h2>十一、可靠性设计</h2>
 
 <div class="card">
   <div class="card-header">
@@ -346,7 +388,7 @@ flowchart LR
   </div>
 </div>
 
-<h2>十一、业务场景示例</h2>
+<h2>十二、业务场景示例</h2>
 
 <details class="collapse" open>
   <summary><span>💼 场景:销售分析师查询客户商机</span></summary>

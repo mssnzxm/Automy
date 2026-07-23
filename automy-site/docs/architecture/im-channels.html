@@ -227,7 +227,7 @@ sequenceDiagram
     participant IM as IM 平台(飞书)
     participant WH as Webhook 接收器
     participant ROUTE as 会话路由
-    participant AGENT as Agent 编排引擎(Eino ADK)
+    participant AGENT as Agent 编排引擎(AgentScope Java 2.0)
     participant MCP as MCP 工具(CRM/知识库)
     participant RENDER as 结果渲染器
     participant ADAPTER as IM Adapter
@@ -255,7 +255,7 @@ sequenceDiagram
   <tbody>
     <tr><td>Webhook 接收</td><td>校验签名(防伪造)+ SSO Token 鉴权</td><td>签名失败丢弃并告警</td></tr>
     <tr><td>会话路由</td><td>查找最近活跃 Session(同用户同主题),否则新建</td><td>会话不存在则新建并标注 source_channel</td></tr>
-    <tr><td>Agent 编排</td><td>基于 Eino ADK Graph 编排,可调用 MCP 工具</td><td>工具调用失败降级返回提示</td></tr>
+    <tr><td>Agent 编排</td><td>基于 AgentScope ReActAgent + HarnessAgent 编排,可调用 MCP 工具</td><td>工具调用失败降级返回提示</td></tr>
     <tr><td>结果渲染</td><td>渲染为 IM 卡片(飞书 interactive / 企微 markdown)</td><td>渲染失败退化为文本</td></tr>
     <tr><td>跨端同步</td><td>同步到 Web 工作台,标注来源渠道</td><td>同步失败不影响 IM 端回答</td></tr>
   </tbody>
