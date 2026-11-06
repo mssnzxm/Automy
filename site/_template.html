@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     页面模板（_template.html，不计入导航）
+     用法：复制本文件并重命名为目标页面（如 storage.html），然后修改
+     title / h1 / .page-intro / .toc 锚点 / 正文内容；
+     顶部导航、页脚、脚本引用等骨架结构保持不变。
+     ============================================================ -->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 页面标题：替换“页面标题”为实际章节名 -->
+  <title>页面标题 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <!-- 本页导航目录（sticky 侧栏）：把 href 替换为正文各区块的 id -->
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#section-1">第一节 文本与提示框</a>
+      <a href="#section-2">第二节 表格</a>
+      <a href="#section-3">第三节 卡片导航</a>
+      <a href="#section-4">第四节 常用组件</a>
+    </aside>
+
+    <!-- 正文内容区：所有章节写在 main.content 内 -->
+    <main class="content">
+
+      <!-- 页面主标题 + 开头介绍框（.page-intro：两三句话概述本页内容与学习收获） -->
+      <h1 id="intro">页面主标题（复制后替换）</h1>
+      <div class="page-intro">
+        这里是页面开头的简介框（.page-intro）：用两三句话说明本页讲什么、解决什么问题、适合哪类读者。
+      </div>
+
+      <!-- 示例章节一：段落 / 行内元素 / 列表 / 提示框 / 代码块 的标准写法 -->
+      <h2 id="section-1">第一节 文本与提示框</h2>
+      <p>正文段落写法示例。文中可以穿插<a href="#section-2">内部锚点链接</a>、行内代码 <code>spark.sql.shuffle.partitions</code>，以及小标签 <span class="pill">pill 标签</span> 或 <span class="tag">tag 标签</span> 来标注关键词。</p>
+      <ul>
+        <li>无序列表项：要点一，说明某个概念或结论。</li>
+        <li>无序列表项：要点二，说明另一个概念或结论。</li>
+      </ul>
+
+      <!-- 三种提示框：.callout 普通 / .callout-warn 警告 / .callout-best 最佳实践，标题用 <strong> -->
+      <div class="callout">
+        <strong>提示</strong>：普通提示框，用于补充说明与背景知识。
+      </div>
+      <div class="callout-warn">
+        <strong>注意</strong>：警告框，用于易错点、风险操作与兼容性问题。
+      </div>
+      <div class="callout-best">
+        <strong>最佳实践</strong>：推荐做法框，用于生产环境验证过的成熟经验。
+      </div>
+
+      <!-- 代码块：pre > code；注释用 <span class="comment"> 包裹即可显示为绿色 -->
+      <pre><code>-- 示例 SQL：建表语句
+CREATE TABLE lakehouse.ods_orders (
+  order_id     STRING,
+  <span class="comment">-- 用户 ID（注释高亮示例）</span>
+  user_id      STRING,
+  order_amount DECIMAL(12, 2)
+) USING DELTA
+PARTITIONED BY (dt);</code></pre>
+
+      <!-- 示例章节二：表格（表头深色底白字 + 斑马纹） -->
+      <h2 id="section-2">第二节 表格</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>组件</th>
+            <th>类型</th>
+            <th>典型场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Delta Lake</td>
+            <td>开放表格式</td>
+            <td>ACID 事务、流批一体写入</td>
+          </tr>
+          <tr>
+            <td>Apache Iceberg</td>
+            <td>开放表格式</td>
+            <td>大规模元数据管理、隐藏分区</td>
+          </tr>
+          <tr>
+            <td>Apache Hudi</td>
+            <td>开放表格式</td>
+            <td>增量 upsert、记录级更新</td>
+          </tr>
+          <tr>
+            <td>Parquet</td>
+            <td>列式文件格式</td>
+            <td>高压缩比存储、列裁剪读取</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 示例章节三：卡片网格（.card-grid + .card，常用于“进入学习”导航） -->
+      <h2 id="section-3">第三节 卡片导航</h2>
+      <div class="card-grid">
+        <div class="card">
+          <h3>存储层</h3>
+          <p>对象存储、文件格式与开放表格式是湖仓一体存储底座。替换为本卡片的真实描述。</p>
+          <a class="card-link" href="storage.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>计算层</h3>
+          <p>批流一体的计算引擎选型与资源模型。替换为本卡片的真实描述。</p>
+          <a class="card-link" href="compute.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>查询层</h3>
+          <p>交互式查询与联邦查询引擎的落地方式。替换为本卡片的真实描述。</p>
+          <a class="card-link" href="query.html">进入学习 →</a>
+        </div>
+      </div>
+
+      <!-- 示例章节四：常用组件（分层架构条 / SVG 架构图 / 两栏网格） -->
+      <h2 id="section-4">第四节 常用组件</h2>
+
+      <!-- .arch-layer：纯 CSS 分层架构条，自上而下堆叠即可 -->
+      <div class="arch-layer">数据集成层：CDC / 批同步 / 流式接入</div>
+      <div class="arch-layer">计算层：Spark / Flink / Trino</div>
+      <div class="arch-layer">存储层：对象存储 + 开放表格式</div>
+
+      <!-- .diagram：内联 SVG 架构图容器（svg 需内联，禁止引用外部图片） -->
+      <div class="diagram">
+        <svg width="560" height="130" viewBox="0 0 560 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="湖仓分层示意图">
+          <rect x="10" y="10" width="540" height="50" rx="8" fill="#0f766e"></rect>
+          <text x="280" y="41" text-anchor="middle" fill="#ffffff" font-size="15">计算层 / 查询引擎</text>
+          <rect x="10" y="70" width="540" height="50" rx="8" fill="#14b8a6"></rect>
+          <text x="280" y="101" text-anchor="middle" fill="#ffffff" font-size="15">存储层 / 开放表格式</text>
+        </svg>
+      </div>
+
+      <!-- .grid-2：两栏网格（窄屏自动变单列），内部可放任意内容 -->
+      <div class="grid-2">
+        <div class="callout">
+          <strong>左栏</strong>：两栏对比的左侧内容示例。
+        </div>
+        <div class="callout">
+          <strong>右栏</strong>：两栏对比的右侧内容示例。
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

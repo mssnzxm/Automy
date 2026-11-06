@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>性能调优实战 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <!-- 本页导航目录（sticky 侧栏） -->
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#positioning">本层定位</a>
+      <a href="#small-files">小文件治理</a>
+      <a href="#compaction">Compaction 调度</a>
+      <a href="#query-accel">查询加速</a>
+      <a href="#isolation">资源隔离</a>
+      <a href="#troubleshooting">瓶颈排查方法论</a>
+      <a href="#capacity">容量规划</a>
+      <a href="#case-study">调优案例</a>
+    </aside>
+
+    <!-- 正文内容区 -->
+    <main class="content">
+
+      <h1>性能调优实战</h1>
+      <div class="page-intro">
+        本页面向已经把湖仓跑起来、开始被"慢、贵、抖"三个字折磨的工程师：从小文件治理、Compaction 调度、查询加速、资源隔离，
+        到瓶颈排查四步法与容量规划，最后以一个实时入湖链路的完整调优案例收束。学完你将掌握一套可复用的"发现问题 → 定位根因 → 实施修复 → 回归验证"闭环打法。
+      </div>
+
+      <h2 id="positioning">本层定位</h2>
+      <p>调优不是"背参数"。同一个 <code>spark.sql.shuffle.partitions</code>，在倾斜的表上是救命药，在均匀的表上是毒药。性能调优的本质是一套<strong>闭环方法论</strong>：先用可观测体系（监控、审计、Profile）找到瓶颈，再定位根因（是数据模型问题、配置问题还是资源问题），然后针对性地改配置或改模型，最后用回归验证确认修复生效并防止劣化回头。</p>
+
+      <div class="diagram">
+        <svg width="640" height="150" viewBox="0 0 640 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="性能调优闭环方法论流程图">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"></polygon>
+            </marker>
+          </defs>
+          <rect x="10" y="45" width="130" height="52" rx="10" fill="#0f766e"></rect>
+          <text x="75" y="66" text-anchor="middle" fill="#ffffff" font-size="13">① 找瓶颈</text>
+          <text x="75" y="84" text-anchor="middle" fill="#ccfbf1" font-size="11">可观测：监控+审计</text>
+          <rect x="175" y="45" width="130" height="52" rx="10" fill="#14b8a6"></rect>
+          <text x="240" y="66" text-anchor="middle" fill="#ffffff" font-size="13">② 定根因</text>
+          <text x="240" y="84" text-anchor="middle" fill="#ecfeff" font-size="11">模型 / 配置 / 资源</text>
+          <rect x="340" y="45" width="130" height="52" rx="10" fill="#0f766e"></rect>
+          <text x="405" y="66" text-anchor="middle" fill="#ffffff" font-size="13">③ 实施修复</text>
+          <text x="405" y="84" text-anchor="middle" fill="#ccfbf1" font-size="11">改配置 / 改模型</text>
+          <rect x="505" y="45" width="125" height="52" rx="10" fill="#14b8a6"></rect>
+          <text x="567" y="66" text-anchor="middle" fill="#ffffff" font-size="13">④ 回归验证</text>
+          <text x="567" y="84" text-anchor="middle" fill="#ecfeff" font-size="11">指标对比留档</text>
+          <line x1="140" y1="71" x2="173" y2="71" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrowhead)"></line>
+          <line x1="305" y1="71" x2="338" y2="71" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrowhead)"></line>
+          <line x1="470" y1="71" x2="503" y2="71" stroke="#0f766e" stroke-width="2.5" marker-end="url(#arrowhead)"></line>
+          <path d="M 567 97 L 567 128 L 75 128 L 75 99" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowhead)"></path>
+          <text x="320" y="122" text-anchor="middle" fill="#64748b" font-size="11">不达标则回到 ①，每轮闭环留档避免重复踩坑</text>
+        </svg>
+      </div>
+
+      <ul>
+        <li><strong>找瓶颈（可观测）</strong>：没有度量就没有调优。吞吐、延迟、CPU/IO/内存水位、Shuffle 量、Spill 量必须先看得见（参见可观测页）；</li>
+        <li><strong>定根因</strong>：区分三类根因——数据模型（分区键选错、倾斜键、宽表过宽）、配置（并行度、内存、文件大小）、资源（队列抢占、磁盘瓶颈）；</li>
+        <li><strong>实施修复</strong>：一次只改一个变量，否则验证时说不清哪个改动起效；</li>
+        <li><strong>回归验证</strong>：调优前后用同一数据集、同一并发做基准对比，指标（耗时/扫描量/费用）留档进调优知识库。</li>
+      </ul>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：最常见的反模式是"玄学调参"——不看 Profile 直接把并行度、内存翻倍。短期掩盖问题的代价是：资源账单翻倍，而根因（往往是数据倾斜或小文件）还在原地。请永远从 ① 开始。
+      </div>
+
+      <h2 id="small-files">小文件治理</h2>
+      <p>小文件是湖仓性能的头号慢性病。每个 Iceberg 数据文件在元数据中都有 manifest 条目、在引擎侧都要占用一次打开/关闭与调度开销。当单表文件数达到十万级，查询连"列清单"都要几秒钟，写入端 commit 变慢，NameNode（HDFS 部署时）内存被元数据压垮。</p>
+
+      <h3>成因分析</h3>
+      <ul>
+        <li><strong>高频提交</strong>：流式作业为了秒级可见性每分钟甚至每 10 秒 commit 一次，每次 commit 产生一批新文件，一天轻松堆出上万个文件；</li>
+        <li><strong>分区过细</strong>：按"小时 × 城市 × 渠道"三重分区，低流量组合每天只落几 KB 数据，文件永远长不大；</li>
+        <li><strong>并行写入过宽</strong>：Spark 写入 2000 个 task，每个 task 不管数据多少都各写一个文件，"众多个 1MB 文件"由此诞生；</li>
+        <li><strong>上游切分</strong>：同步工具按块导出 CSV→Parquet，块大小即文件大小，未对齐目标文件尺寸。</li>
+      </ul>
+
+      <h3>检测：先量化再动手</h3>
+      <pre><code>-- ========== 检测 1：文件大小分布画像（基于 Iceberg 元数据表）==========
+SELECT
+  count(*)                                       AS total_files,
+  round(sum(file_size_in_bytes) / 1024 / 1024)    AS total_mb,
+  round(avg(file_size_in_bytes) / 1024 / 1024, 2) AS avg_mb,
+  max(file_size_in_bytes) / 1024 / 1024           AS max_mb,
+  sum(CASE WHEN file_size_in_bytes &lt; 1048576     <span class="comment">-- &lt; 1MB 的小文件</span>
+           THEN 1 ELSE 0 END)                    AS files_lt_1m,
+  round(sum(CASE WHEN file_size_in_bytes &lt; 1048576
+                 THEN file_size_in_bytes ELSE 0 END) * 100.0
+        / sum(file_size_in_bytes), 1)            AS small_file_pct   <span class="comment">-- 小文件字节占比</span>
+FROM lake.dwd_trade_order_di.files
+WHERE partition LIKE '%dt=2026-11-04%';
+<span class="comment">-- 健康基线：avg_mb 接近目标文件大小(128-512MB)；files_lt_1m 占比 &lt; 5%</span>
+
+-- ========== 检测 2：每个分区的文件数排行（找重灾区）==========
+SELECT partition, count(*) AS file_cnt
+FROM lake.dwd_trade_order_di.files
+GROUP BY partition
+ORDER BY file_cnt DESC
+LIMIT 20;
+<span class="comment">-- 单分区文件数 &gt; 1000 即列入合并候选</span></code></pre>
+
+      <h3>治标：rewrite_data_files 存储过程</h3>
+      <p>Iceberg 自带的 <code>rewrite_data_files</code> 存储过程按策略把小文件重写为大文件，适合作为存量救火与例行合并手段：</p>
+
+      <pre><code>-- binpack 策略（默认）：把小文件按目标大小装箱合并，开销最小
+CALL lake.system.rewrite_data_files(
+  table =&gt; 'lake.dwd_trade_order_di',
+  strategy =&gt; 'binpack',
+  where =&gt; 'dt = \'2026-11-04\'',                     <span class="comment">-- 只合并当天分区，控制影响面</span>
+  options =&gt; map(
+    'target-file-size-bytes', '268435456',              <span class="comment">-- 目标 256MB/文件</span>
+    'min-file-size-bytes',    '10485760',               <span class="comment">-- &lt; 10MB 的才参与合并</span>
+    'max-file-size-bytes',    '536870912',              <span class="comment">-- &gt; 512MB 的大文件将被拆分</span>
+    'min-input-files',       '5'                        <span class="comment">-- 一个分组至少 5 个文件才值得合并</span>
+  )
+);
+
+<span class="comment">-- sort 策略：合并的同时按排序列重写，兼顾 Z-Order 聚簇（代价更高）</span>
+CALL lake.system.rewrite_data_files(
+  table =&gt; 'lake.dwd_trade_order_di',
+  strategy =&gt; 'sort',
+  sort_order =&gt; 'user_id ASC NULLS FIRST',
+  options =&gt; map('target-file-size-bytes', '268435456')
+);</code></pre>
+
+      <h3>治本：写入端控制</h3>
+      <p>合并是"吃药"，写入端控制才是"改生活方式"。三个抓手：<strong>目标文件大小</strong>、<strong>提交频率对齐</strong>、<strong>分区设计收敛</strong>。</p>
+      <pre><code class="language-yaml"><span class="comment"># Flink 流式入湖：控制文件大小与提交频率（iceberg connector 参数）</span>
+table.exec.sink.upsert-materialize: AUTO
+write.target-file-size-bytes: 268435456     <span class="comment"># 256MB：文件写满即滚动</span>
+write.distribution-mode: hash              <span class="comment"># 按 partition key hash 分区写入，避免每个 task 都写所有分区</span>
+commit.interval: 120000                    <span class="comment"># 2 分钟一次 checkpoint/commit（原 10s 是万恶之源）</span>
+write.merge.schema: true
+
+<span class="comment"># Spark 批写入：先 repartition 落盘，再 commit，避免 2000 个小文件</span>
+<span class="comment"># df.repartition(n, col("dt")) 的 n 按 日增量/256MB 估算</span></code></pre>
+      <ul>
+        <li><strong>target-file-size-bytes</strong>：设为 128–512MB。流式作业同时配 <code>write.distribution-mode=hash</code>，让同一分区的数据落进同一 writer，文件数 = 分区数 × 少数滚动，而不是 task 数 × 分区数；</li>
+        <li><strong>checkpoint 对齐</strong>：commit 间隔与可见性需求对齐——分钟级足够就别用秒级；真需要秒级可见，用"流表秒级 + 例行合并兜底"的组合拳；</li>
+        <li><strong>分区设计原则</strong>：单分区日增量低于 1GB 就不要按天分区，改按月；组合分区维度优先用 Iceberg 隐藏分区（<code>days(ts)</code>、<code>bucket(user_id, 16)</code>）代替显式列分区。</li>
+      </ul>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：小文件治理"三分治、七分防"。防线上，流式作业上线前必须过"文件尺寸画像"准入检查（检测 SQL 常态化跑在 CI 里）；治线上，把 <code>rewrite_data_files</code> 挂到每日低峰的例行调度（见下节），双管齐下后单表文件数稳定在千级以内。
+      </div>
+
+      <h2 id="compaction">Compaction 调度</h2>
+      <p>合并不能靠人想起来才跑，要变成<strong>有触发条件、有资源预算、有验收指标</strong>的常态化调度。本节给出触发策略、DolphinScheduler 调度示例，以及与之配套的快照过期与孤儿文件清理——这三件事是"铁三角"，只做合并不做清理，元数据照样膨胀。</p>
+
+      <h3>触发策略</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>策略</th>
+            <th>触发条件</th>
+            <th>适用场景</th>
+            <th>风险点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">文件数阈值</span></td>
+            <td>单分区文件数 &gt; 50 / 总量超均值 2σ</td>
+            <td>流量不稳定的流式表</td>
+            <td>需元数据巡检任务支撑</td>
+          </tr>
+          <tr>
+            <td><span class="pill">定时窗口</span></td>
+            <td>每日 01:00–05:00 低峰</td>
+            <td>日批为主的常规表</td>
+            <td>高峰 spill 挤占，窗口要够</td>
+          </tr>
+          <tr>
+            <td><span class="pill">合并大小</span></td>
+            <td>待合并字节 &gt; 分区均值 1.5×</td>
+            <td>大表只合并增量部分</td>
+            <td>需记录上次合并位点</td>
+          </tr>
+          <tr>
+            <td><span class="pill">写入后钩子</span></td>
+            <td>同步作业完成即触发小合并</td>
+            <td>Flink→Iceberg 流表</td>
+            <td>与流写入抢锁，需错峰</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>调度示例：凌晨窗口 + Spark 存储过程</h3>
+      <pre><code class="language-yaml"><span class="comment"># DolphinScheduler：每日 01:30 合并窗口（含到期快照清理与孤儿文件清理）</span>
+name: iceberg_maintenance
+cron: "0 30 1 * * ?"
+tasks:
+  - name: rewrite_small_files
+    type: SPARK
+    sparkParams: &gt;
+      --master yarn --deploy-mode cluster
+      --queue maintenance           <span class="comment"># 独立维护队列，不与业务抢资源</span>
+      --num-executors 10 --executor-cores 4 --executor-memory 8g
+    script: |
+      spark-sql -e "
+        CALL lake.system.rewrite_data_files(
+          table =&gt; 'lake.dwd_trade_order_di',
+          strategy =&gt; 'binpack',
+          options =&gt; map('target-file-size-bytes','268435456')
+        )"
+
+  - name: expire_snapshots                <span class="comment"># 快照过期：物理删除被旧快照引用的文件</span>
+    type: SPARK
+    depTasks: [rewrite_small_files]
+    script: |
+      spark-sql -e "
+        CALL lake.system.expire_snapshots(
+          table =&gt; 'lake.dwd_trade_order_di',
+          older_than =&gt; timestamp '2026-10-29 00:00:00',
+          max_concurrent_deletes =&gt; 4   <span class="comment"># 限制并发删除，避免对象存储限流</span>
+        )"
+
+  - name: remove_orphan_files             <span class="comment"># 孤儿文件：无任何 manifest 引用的残留文件</span>
+    type: SPARK
+    depTasks: [expire_snapshots]
+    script: |
+      spark-sql -e "
+        CALL lake.system.remove_orphan_files(
+          table =&gt; 'lake.dwd_trade_order_di',
+          older_than =&gt; timestamp '2026-11-04 01:00:00'  <span class="comment"># 仅清理 24h 前的孤儿，防止误删在途提交</span>
+        )"
+<span class="comment"># 顺序有讲究：先合并（产生新快照）→ 再过期（清旧快照）→ 最后扫孤儿（清无主文件）</span>
+<span class="comment"># remove_orphan_files 的 older_than 必须留足缓冲，至少大于最大事务时长</span></code></pre>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：<code>remove_orphan_files</code> 会真实删除对象存储文件。如果集群里还有别的引擎（如 Trino 正在写同一张表），<code>older_than</code> 缓冲必须覆盖该引擎的最长事务时长，否则会把别人正在写的文件当孤儿删掉——这是真实发生过的事故。保守做法：缓冲 ≥ 24 小时，且只在确认为单写入器的表上执行。
+      </div>
+
+      <h2 id="query-accel">查询加速</h2>
+      <p>交互式查询的加速手段可以归纳为"五板斧"——缓存、分区裁剪、谓词下推、物化视图、排序聚簇。它们作用的环节不同，可以叠加使用，理解"每板斧省的是哪一段开销"是选型关键：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>手段</th>
+            <th>作用环节</th>
+            <th>典型收益</th>
+            <th>示例</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">缓存</span></td>
+            <td>引擎内存 / 结果集层</td>
+            <td>重复查询 &lt; 100ms</td>
+            <td>Trino：<code>query.result-cache</code>；Doris SQL Cache</td>
+          </tr>
+          <tr>
+            <td><span class="pill">分区裁剪</span></td>
+            <td>文件清单过滤</td>
+            <td>扫描量降 1–2 个量级</td>
+            <td>谓词含分区列：<code>WHERE dt = '2026-11-04'</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill">谓词下推</span></td>
+            <td>Parquet/Min/Max 统计</td>
+            <td>跳过无关行组</td>
+            <td>Iceberg 列统计 + Trino pushdown</td>
+          </tr>
+          <tr>
+            <td><span class="pill">物化视图</span></td>
+            <td>预计算层</td>
+            <td>聚合查询 10×+</td>
+            <td>Doris：<code>CREATE MATERIALIZED VIEW</code></td>
+          </tr>
+          <tr>
+            <td><span class="pill">排序聚簇</span></td>
+            <td>物理布局</td>
+            <td>下推命中率提升</td>
+            <td>Iceberg：<code>WRITE ORDERED BY</code> / Z-Order</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Iceberg 排序写入：提升裁剪率</h3>
+      <p>数据物理有序后，每个文件在排序列上的 min/max 区间变窄，谓词下推能跳过更多文件。对高频过滤列做写入排序，是"改一次物理布局、所有查询受益"的投资：</p>
+
+      <pre><code>-- 写入时声明排序：Spark SQL（对后续 INSERT 生效）
+ALTER TABLE lake.dwd_trade_order_di
+WRITE ORDERED BY (dt, user_id);
+<span class="comment">-- 排序列选择：优先高频过滤列（查询审计统计 Top 过滤列），
+-- 其次低基数列在前、高基数在后，让文件区间收敛更快</span>
+
+-- 验证裁剪效果：对比排序前后扫描的文件数
+SELECT count(*) AS files_scanned
+FROM lake.dwd_trade_order_di.files
+WHERE dt = '2026-11-04'
+  AND 42 BETWEEN 1337 AND 1428;  <span class="comment">-- 模拟 min/max 统计裁剪判定</span>
+<span class="comment">-- 典型效果：按 user_id 查询单用户订单，文件命中率从 100% 降到 3–8%，</span>
+<span class="comment">-- P99 查询延迟从 12s 降至 1s 以内</span></code></pre>
+
+      <h3>Doris 物化视图 + Trino 结果缓存</h3>
+      <pre><code>-- ========== Doris：异步物化视图（同步刷新型亦可）==========
+CREATE MATERIALIZED VIEW lake.mv_user_gmv_1d
+BUILD IMMEDIATE REFRESH SCHEDULE EVERY 1 HOUR
+KEYS (user_id, dt)
+DISTRIBUTED BY HASH(user_id) BUCKETS 10
+PROPERTIES ("grace_period" = "0")
+AS
+SELECT user_id, dt,
+       count(*)        AS order_cnt,
+       sum(pay_amount) AS gmv
+FROM lake.dwd_trade_order_di
+WHERE pay_status = 1
+GROUP BY user_id, dt;
+<span class="comment"># 查询命中 MV 时自动改写（query rewrite），对上层 SQL 完全透明</span>
+
+-- ========== Trino：结果缓存 + 元数据缓存（config.properties）==========
+<span class="comment"># query.max-history / result cache 属于企业发行版特性，</span>
+<span class="comment"># 社区版可用 Coordinator 侧 catalog 缓存 + Alluxio 方案近似</span></code></pre>
+      <pre><code class="language-properties"><span class="comment"># Trino config.properties：加速相关核心项</span>
+query.max-memory-per-node=8GB
+<span class="comment"># 驱动缓存：Iceberg 元数据缓存（减少 list/parse metadata 开销）</span>
+iceberg.catalog.caching.enabled=true
+metadata.cache-ttl=1h
+metadata.cache-maximum-size=10000
+<span class="comment"># 结果缓存（企业版 / 或前置一层数据网关实现同样语义）：</span>
+<span class="comment"># 相同 SQL + 数据版本未变 → 直接返回缓存结果，Dashboard 场景命中率极高</span></code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：五板斧的落地顺序按 ROI 排：① 先保证分区裁剪（成本为零，收益最大）；② 排序写入覆盖 Top 20 高频查询的过滤列；③ 只给 Dashboard 类重复查询开结果缓存与物化视图。切忌一上来就全表 Z-Order——重写成本高，收益只对多维查询明显。
+      </div>
+
+      <h2 id="isolation">资源隔离</h2>
+      <p>性能问题的另一半根源不在"慢"，而在"抢"。一个分析师的全表扫描把队列占满，核心 ETL 全体延迟；报表高峰把 Trino worker 内存打爆，所有人的查询一起失败。资源隔离的目标是让<strong>重要负载不受不重要负载拖累</strong>，各归各的"车道"。</p>
+
+      <h3>YARN 队列隔离</h3>
+      <p>队列划分的要点（详细的公平/容量调度器对比见<a href="scheduling.html">调度资源</a>页）：<strong>按负载重要性分层</strong>，核心 ETL、临时查询、例行维护各占独立队列，配额与优先级区分：</p>
+
+      <pre><code class="language-xml">&lt;!-- capacity-scheduler.xml：三车道示例 --&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.queues&lt;/name&gt;
+  &lt;value&gt;etl,adhoc,maintenance&lt;/value&gt;   &lt;!-- 核心 / 临时 / 维护三车道 --&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.etl.capacity&lt;/name&gt;
+  &lt;value&gt;60&lt;/value&gt;   &lt;!-- ETL 稳态 60% --&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.etl.maximum-capacity&lt;/name&gt;
+  &lt;value&gt;80&lt;/value&gt;   &lt;!-- 峰值可弹性借用到 80% --&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.adhoc.capacity&lt;/name&gt;
+  &lt;value&gt;20&lt;/value&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.adhoc.maximum-capacity&lt;/name&gt;
+  &lt;value&gt;30&lt;/value&gt;   &lt;!-- adhoc 硬顶 30%，防止拖垮全局 --&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.maintenance.capacity&lt;/name&gt;
+  &lt;value&gt;20&lt;/value&gt;
+&lt;/property&gt;</code></pre>
+
+      <h3>Trino resource groups</h3>
+      <p>Trino 侧用 resource groups 管理并发与内存。规则按 user/source/catalog 匹配进组，每组限并发数与内存占比，超限排队：</p>
+
+      <pre><code class="language-properties"><span class="comment"># resource-groups.properties：选择器规则（admin 直通，其余入对应组）</span>
+resource-groups.configuration-manager=file
+resource-groups.config-file=etc/resource_groups.json
+<span class="comment"># selector: user=etl_bot → group etl；user 匹配 ^ analyst_ → group adhoc</span></code></pre>
+
+      <pre><code class="language-json">{
+  "rootGroups": [
+    {
+      "name": "global",
+      "softMemoryLimit": "80%",
+      "softConcurrencyLimit": 40,
+      "hardConcurrencyLimit": 60,
+      "subGroups": [
+        {
+          "name": "etl",
+          "softMemoryLimit": "50%",
+          "softConcurrencyLimit": 10,      <span class="comment">// 核心管道组</span>
+          "hardConcurrencyLimit": 15,
+          "schedulingPolicy": "weighted_fair",
+          "schedulingWeight": 100          <span class="comment">// 高权重：调度优先保障</span>
+        },
+        {
+          "name": "adhoc",
+          "softMemoryLimit": "20%",
+          "softConcurrencyLimit": 20,      <span class="comment">// 分析师交互查询组</span>
+          "hardConcurrencyLimit": 30,
+          "schedulingPolicy": "fair",
+          "schedulingWeight": 1            <span class="comment">// 低权重：有空位才跑</span>
+        }
+      ]
+    }
+  ],
+  "selectors": [
+    { "source": "etl-scheduler", "group": "global.etl" },
+    { "user": "analyst_.*",      "group": "global.adhoc" }
+  ]
+}</code></pre>
+
+      <h3>Kafka / Spark 消费组隔离</h3>
+      <ul>
+        <li><strong>Kafka 消费组</strong>：同一 topic 的不同消费场景用不同 group.id——Flink 入湖、实时大屏、风控消费各自独立 offset，一个消费组积压不影响另外两个（但注意 group 变多会增加 broker 的元数据与 rebalance 开销）；</li>
+        <li><strong>Spark 消费隔离</strong>：spark streaming / 结构化流作业各自独占 executor 池（<code>spark.yarn.queue</code> + <code>spark.dynamicAllocation</code> 上限），禁止流批同队列混跑——批任务把流任务的 executor 挤掉，会造成 rebalance 风暴与 lag 堆积。</li>
+      </ul>
+
+      <h3>峰谷错峰策略</h3>
+      <p>隔离解决"谁挤谁"，错峰解决"什么时候挤"。典型日内负载有两个峰：早 8–10 点报表峰、晚 20–22 点实时大屏峰。错峰手段：全量回刷/重算/归档等可延迟负载强制放 01:00–05:00 谷段（调度系统依赖编排保证先后）；adhoc 查询在大促等封网期临时降并发上限（resource group 热更新）；跨区报表错时拉数（华东 8 点跑、华北 9 点跑），把网络与查询峰摊开。</p>
+
+      <h2 id="troubleshooting">瓶颈排查方法论</h2>
+      <p>面对"作业变慢了"这种模糊投诉，需要一套从粗到细的标准动线，避免"上来就翻日志"的低效排查。推荐<strong>四步法</strong>：</p>
+
+      <div class="arch-layer">第一步 看监控定位层：链路哪一段慢？（Kafka lag / 作业耗时 / 查询延迟）</div>
+      <div class="arch-layer">第二步 定位作业阶段：Plan 里哪个 Stage 耗时异常、Spill 有多大？</div>
+      <div class="arch-layer">第三步 定位算子/倾斜：哪个 Task 最慢？数据分布是否倾斜？</div>
+      <div class="arch-layer">第四步 验证修复：改一项 → 重跑 → 指标对比 → 留档</div>
+
+      <ol>
+        <li><strong>看监控定位层</strong>：先看链路大盘——Kafka 消费 lag、Flink 算子反压、Spark stage 耗时、Trino 查询 P99。哪段曲线异常就往哪段钻，别在正常的层里翻日志；</li>
+        <li><strong>定位作业阶段</strong>：Spark UI（或 Spark History Server）看 Stage 累计时间与 GC/spill 指标；Trino 用 <code>EXPLAIN ANALYZE</code> 看算子级耗时分布；</li>
+        <li><strong>定位算子/倾斜</strong>：找"最长尾 Task"——如果 max task 时间是 median 的 10 倍以上，基本是数据倾斜；看该 task 的 shuffle read 大小确认；</li>
+        <li><strong>验证修复</strong>：按上文本页方法论闭环，改动与指标进调优知识库。</li>
+      </ol>
+
+      <h3>常见病症速查表</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>症状</th>
+            <th>可能根因</th>
+            <th>处置</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU 利用率高、进度正常</td>
+            <td>列裁剪失效（SELECT *）、UDF 密集、序列化开销大</td>
+            <td>只选必要列；UDF 换内建函数；开 <code>arrow</code> 相关优化</td>
+          </tr>
+          <tr>
+            <td>IO wait 高、磁盘打满</td>
+            <td>小文件海量 / 临时目录与数据盘同盘</td>
+            <td>先治理小文件（本页上文）；spark.local.dir 独立盘</td>
+          </tr>
+          <tr>
+            <td>任务频繁 Spill 溢写</td>
+            <td>Shuffle 内存不足、分区数过少</td>
+            <td>升 <code>spark.sql.shuffle.partitions</code>；加 executor 内存；倾斜先加盐</td>
+          </tr>
+          <tr>
+            <td>GC 严重（时间占比 &gt; 15%）</td>
+            <td>堆内存不足 / 缓存了过多 broadcast、对象过大</td>
+            <td>调 memory/storage 比例；检查广播大表；G1GC 替换 CMS</td>
+          </tr>
+          <tr>
+            <td>数据倾斜（个别 Task 10× 慢）</td>
+            <td>热点 key（空值、默认值、大商家 ID）</td>
+            <td>加盐拆分 + 二次聚合；过滤空值后再聚合</td>
+          </tr>
+          <tr>
+            <td>Kafka lag 堆积</td>
+            <td>消费能力 &lt; 生产速率、分区数不足、消费者被挤掉</td>
+            <td>扩分区/并行度；查 executor 被抢占；隔离消费组</td>
+          </tr>
+          <tr>
+            <td>查询偶发超时、平时正常</td>
+            <td>并发高峰互相挤占、缓存击穿</td>
+            <td>resource group 限流；结果缓存；错峰调度</td>
+          </tr>
+          <tr>
+            <td>写入 commit 越来越慢</td>
+            <td>manifest 膨胀（快照多、文件多）</td>
+            <td>合并 + expire_snapshots 常态化；降低提交频率</td>
+          </tr>
+          <tr>
+            <td>Join 后行数暴增</td>
+            <td>一对多 Join 未去重、维表有重复 key</td>
+            <td>DQC 加维表唯一性校验；Join 前先去重</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="capacity">容量规划</h2>
+      <p>容量规划是把"业务增量"翻译成"资源采购单"的算术题，也是防止"跑半年后存储与算力双不够"的前置防御。标准五步：<strong>数据增量测算 → 存储与计算反推 → 网络与峰值校验 → 压测验证 → 预留 30%</strong>。</p>
+      <ol>
+        <li><strong>数据增量测算</strong>：按源系统口径统计"日增原始字节 × 副本与放大系数"。放大系数含：表格式与压缩（Parquet+ZSTD 通常 3–5× 压缩，即原始 1TB 落湖约 200–350GB）、多套副本（快照保留期内的增量、备份 1 份）、中间产物（Shuffle/临时目录，经验系数 1.3×）；</li>
+        <li><strong>存储与计算反推</strong>：存储按"N 个月在线 + 冷归档"折算总量；计算按"日批窗口需处理的总量 ÷ 可用窗口时间"反推核时；</li>
+        <li><strong>网络与峰值校验</strong>：核对跨机房同步带宽、对象存储吞吐上限（QPS 与 GB/s）、大促日峰值是否打穿链路最小环节；</li>
+        <li><strong>压测验证</strong>：用生产 3 倍日增的模拟数据走完整链路，验证 SLA 余量，而不是纸面推演；</li>
+        <li><strong>预留 30%</strong>：所有规划值 × 1.3，覆盖流量波动、故障重跑（大促后回刷）与突发的 ad-hoc 分析。</li>
+      </ol>
+
+      <h3>示例计算：日增 2TB 场景</h3>
+      <pre><code>-- ===== 输入假设 =====
+原始日增量        = 2 TB（业务库/日志源合计）
+Parquet 落湖压缩  ≈ 4:1（ZSTD）
+副本/快照膨胀     = ×1.2（7 天快照保留）
+备份副本          = ×1（跨区备份一份）
+中间产物系数      = ×1.3（Shuffle/临时/重试）
+
+-- ===== 存储推算（在线热/温层）=====
+落湖日增量 = 2 TB / 4 = 0.5 TB
+含快照膨胀 = 0.5 × 1.2 = 0.6 TB/天
+在线保留 1 年（DWD 为主）≈ 0.6 × 365 ≈ 219 TB ≈ 220 TB
+归档（冷层，另算）≈ 同量级但单价约 1/8
+
+-- ===== 计算推算（日批窗口）=====
+日处理量（含中间产物）= 0.5 TB × 1.3 ≈ 0.65 TB 实际扫描量更大（列存只扫必要列）
+假设全链路日批需在 4h 窗口内完成，历史吞吐经验值 20 MB/s/核（含 IO 等待）：
+所需核数 ≈ 0.65 TB × 1024 / 4h / (20 MB/s) ≈ 86 核持续
+预留 30% ⇒ 约 120 核（再按 20% 失败重跑余量向上取整到机型规格）
+
+-- ===== 网络校验 =====
+跨区备份：0.5 TB/天，需 ≥ 10 MB/s 持续带宽（错峰 8h 窗口内完成）
+对象存储读吞吐：大促峰值 3× 日增量集中回刷 ⇒ 需与云厂商确认 bucket 吞吐配额</code></pre>
+
+      <div class="callout">
+        <strong>提示</strong>：容量规划的最常见错误是"只算存储不算计算"——数据便宜、算力贵，220TB 存储的费用可能不到每日全量扫描它所需计算费用的三分之一。把"扫描量预算"（每月多少 PB 被读）作为一等公民指标纳入规划。
+      </div>
+
+      <h2 id="case-study">调优案例</h2>
+      <p>最后用一个真实形态的实战案例把全页知识串起来。<span class="tag">背景</span><span class="tag">实时入湖链路</span><span class="tag">Flink → Iceberg</span></p>
+
+      <h3>现象：端到端延迟告警</h3>
+      <p>某电商平台"订单 CDC → Flink → Iceberg DWD → Trino 实时大屏"链路，稳定运行三个月后连续一周在晚高峰触发端到端延迟告警：Kafka 消费 lag 从常态 2 万涨到 80 万，大屏数据新鲜度从 1 分钟劣化到 15 分钟以上，且 Trino 侧大屏查询 P99 从 3s 涨到 20s。</p>
+
+      <h3>定位：四步法走一遍</h3>
+      <ol>
+        <li><strong>看监控定位层</strong>：链路大盘显示 Kafka lag 堆积在 Flink 消费组，且 Flink 作业出现周期性反压——问题在消费侧处理能力，不在 broker；</li>
+        <li><strong>定位作业阶段</strong>：Flink WebUI 反压点在 Iceberg Sink 算子，该算子每次 checkpoint（10 秒一次）耗时从 2s 涨到 60s+，逼近 checkpoint 超时阈值；</li>
+        <li><strong>定位根因</strong>：查 Iceberg 表元数据发现单日分区文件数达 12000+（每个 subtask × 每 10 秒 commit 各产文件），manifest 膨胀导致 commit 变慢；同时 sink 算子按 order_id hash 后仍有 2 个大商家热点 key 造成写入倾斜；</li>
+        <li><strong>结论</strong>：根因是<strong>高频小文件 commit</strong> 叠加<strong>写入倾斜</strong>，二者互相放大——commit 慢导致 checkpoint 拖长，反压传导回消费端。</li>
+      </ol>
+
+      <h3>措施：三管齐下</h3>
+      <pre><code class="language-yaml"><span class="comment"># 措施 1：写入端治理（治本）——降频 + 定尺寸 + 按分区聚拢</span>
+commit.interval: 600000                      <span class="comment"># 10s → 10min（大屏可接受分钟级新鲜度）</span>
+write.target-file-size-bytes: 268435456      <span class="comment"># 256MB 目标文件</span>
+write.distribution-mode: hash                <span class="comment"># hash 到分区键，聚拢写入</span>
+
+<span class="comment"># 措施 2：倾斜治理——热点 key 加盐打散（Flink SQL 侧）</span>
+<span class="comment"># sink 前按 (seller_id % 16) 预分区，把大商家流量摊到 16 个 subtask</span>
+
+<span class="comment"># 措施 3：存量治理 + 例行维护（治标兜底）</span>
+<span class="comment"># 每日 01:30 DolphinScheduler 调度：</span>
+<span class="comment">#   rewrite_data_files(binpack) → expire_snapshots(7d) → remove_orphan_files</span></code></pre>
+
+      <h3>效果：前后指标对比</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>指标</th>
+            <th>调优前</th>
+            <th>调优后（一周后）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Kafka 消费 lag（晚高峰）</td>
+            <td>80 万（持续堆积）</td>
+            <td>&lt; 1 万（稳定消化）</td>
+          </tr>
+          <tr>
+            <td>大屏数据新鲜度</td>
+            <td>15 分钟+</td>
+            <td>2 分钟内</td>
+          </tr>
+          <tr>
+            <td>单日分区文件数</td>
+            <td>12000+</td>
+            <td>约 300</td>
+          </tr>
+          <tr>
+            <td>Checkpoint 耗时</td>
+            <td>60s+（濒临超时）</td>
+            <td>8–12s</td>
+          </tr>
+          <tr>
+            <td>大屏查询 P99</td>
+            <td>20s</td>
+            <td>2.5s</td>
+          </tr>
+          <tr>
+            <td>对象存储月费用</td>
+            <td>—（含大量小文件与孤儿）</td>
+            <td>下降约 35%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-best">
+        <strong>复盘沉淀</strong>：本案的三个动作分别对应本页的"写入端控制 / 倾斜加盐 / 例行 Compaction 调度"。事后把"文件数画像"与"checkpoint 耗时"加入流式作业上线准入清单与日常巡检大盘，同类问题再未复发——调优的终点从来不是修好一个作业，而是让一类问题不再发生。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

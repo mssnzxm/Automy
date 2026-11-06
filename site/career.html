@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>岗位能力与进阶 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（窄屏显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页定位</a>
+      <a href="#capability">架构师能力模型</a>
+      <a href="#jd">JD 逐条解读</a>
+      <a href="#xinchuang">信创国产化适配</a>
+      <a href="#ai-lakehouse">AI+湖仓融合</a>
+      <a href="#interview">高频面试题</a>
+      <a href="#plan-90">90 天学习计划</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">岗位能力与进阶</h1>
+      <div class="page-intro">
+        本页把全站知识映射到「数据湖仓一体架构师」岗位的能力模型与面试准备：先给出六层技术栈的能力矩阵与「架构师 vs 高级开发」的差异，再逐条解读一条典型 JD 的六条职责；随后补上信创国产化适配、AI+湖仓融合两个高阶命题；最后用 8 道高频面试题与 90 天学习计划完成从学习到求职的闭环。
+      </div>
+
+      <p>用法建议：先用能力矩阵<strong>自查短板</strong>，再对照 JD 解读<strong>校准目标公司的侧重点</strong>，面试题用于组织自己的答案结构，90 天计划则是从零到面试Ready的执行路径。本页所有章节链接均指向本站对应页面——面试前最后一轮复习，按链接回读即可。</p>
+      <p>
+        <span class="pill">能力模型</span>
+        <span class="pill">JD 解读</span>
+        <span class="pill">信创适配</span>
+        <span class="pill">面试准备</span>
+        <span class="tag">先修：全站十章</span>
+      </p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>能力模型</h3>
+          <p>六层技术栈 × 掌握程度的能力矩阵，逐层给出关键能力点与对应学习章节。</p>
+          <a class="card-link" href="#capability">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>JD 解读</h3>
+          <p>典型架构师 JD 的六条职责逐条拆解，每条挂到本站对应章节。</p>
+          <a class="card-link" href="#jd">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>高频面试题</h3>
+          <p>8 道高频题的答题思路：结构化的思维框架，不是背出来的八股。</p>
+          <a class="card-link" href="#interview">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>90 天计划</h3>
+          <p>三阶段 12 周执行表：每周一个主题、一个可运行实践项目。</p>
+          <a class="card-link" href="#plan-90">进入学习 →</a>
+        </div>
+      </div>
+
+      <!-- ================= 一、架构师能力模型 ================= -->
+      <h2 id="capability">架构师能力模型</h2>
+      <p>能力模型对齐 <a href="architecture.html">总体架构</a> 的六层参考架构：底座四层（存储、计算、查询、集成）要求<strong>精通</strong>——能讲原理、能做选型、能落地规范、能救火；平台两层（调度资源、可观测）要求<strong>熟练</strong>——能用好、能定位问题，不必逐行排查内核。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>技术栈层级</th>
+            <th>掌握程度</th>
+            <th>关键能力点</th>
+            <th>对应章节</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>存储与表格式</td>
+            <td><span class="pill">精通</span></td>
+            <td>对象存储与 Parquet 文件布局；Iceberg / Hudi / Delta 三家对比；分区与聚簇设计；快照、Schema 与分区演进；COW 与 MOR 写入路径</td>
+            <td><a href="storage.html">存储层</a></td>
+          </tr>
+          <tr>
+            <td>计算引擎</td>
+            <td><span class="pill">精通</span></td>
+            <td>Spark 批处理与 shuffle 调优；Flink 流处理、Checkpoint 与状态管理；批流一体的表级落地；作业级资源画像</td>
+            <td><a href="compute.html">计算层</a></td>
+          </tr>
+          <tr>
+            <td>查询引擎</td>
+            <td><span class="pill">精通</span></td>
+            <td>Trino 联邦与缓存机制；Doris / ClickHouse 建模、索引与物化视图；并发隔离与队列治理；查询加速三板斧</td>
+            <td><a href="query.html">查询层</a></td>
+          </tr>
+          <tr>
+            <td>数据集成</td>
+            <td><span class="pill">精通</span></td>
+            <td>Flink CDC 链路；多源入湖规范；Schema 演进与断点续传；质量前置校验；Exactly-Once 语义</td>
+            <td><a href="integration.html">数据集成</a></td>
+          </tr>
+          <tr>
+            <td>调度与资源</td>
+            <td><span class="pill">熟练</span></td>
+            <td>DolphinScheduler / Airflow DAG 编排与补数重跑；YARN / K8s 队列配额与弹性；多租户资源隔离策略</td>
+            <td><a href="scheduling.html">调度资源</a></td>
+          </tr>
+          <tr>
+            <td>可观测性</td>
+            <td><span class="pill">熟练</span></td>
+            <td>小文件 / Compaction / 查询延迟指标体系；Prometheus + Grafana 大盘；告警分级与值班闭环；容量水位监控</td>
+            <td><a href="observability.html">可观测</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>六层之上还有三块<strong>横向放大器</strong>：<a href="governance.html">数据治理</a>（规范、质量、权限、生命周期——架构师的「立法权」）、<a href="optimization.html">性能调优</a>（小文件、Compaction、查询与资源调优——架构师的「救火权」）、<a href="scenarios.html">场景实战</a>（本体、RAG、时序、时空、图——架构师的「变现权」）。六层决定你能不能干，三块决定你干得是否出彩。</p>
+
+      <h3>架构师与高级开发的差异</h3>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>高级开发：把功能做对</strong>。深度在「点」：吃透一两个组件的原理与实现，追求单服务性能与代码质量；成功标准是功能如期上线、SLA 达标、线上无事故；影响半径是自己所在的小团队。
+        </div>
+        <div class="callout">
+          <strong>架构师：把体系立起来</strong>。深度在「面」：选型、分层、规范与权衡（成本 / 风险 / 演进速度三角）；成功标准是三年后这套体系还撑得住业务量级、别人照着你的规范也能做对；影响半径是整个数据团队甚至跨部门。
+        </div>
+      </div>
+      <p>差异可以拆成四点：<strong>时间尺度</strong>（迭代周 vs 演进年，架构师要为三年后的成本负责）；<strong>评价对象</strong>（代码 vs 决策，架构师的核心产出是决策记录 ADR 与规范）；<strong>影响半径</strong>（团队 vs 组织，靠规范与评审放大杠杆）；<strong>知识形态</strong>（实现细节 vs 权衡结论，后者必须能讲清「当时有什么约束、放弃了什么」）。</p>
+
+      <!-- ================= 二、JD 逐条解读 ================= -->
+      <h2 id="jd">JD 逐条解读</h2>
+      <p>下面是一条市场典型的「数据湖仓一体架构师」JD，六条职责逐条拆解。读法：每条先看<strong>考察点</strong>（面试官真正想听什么），再看<strong>对应章节</strong>（回读哪页准备答案）。</p>
+
+      <h3>职责一：负责数据湖仓一体平台的整体架构设计与持续迭代</h3>
+      <p><strong>考察点</strong>：能不能画出六层架构图并讲清每层的职责、边界与数据流向；「持续迭代」考的是演进式架构思维——每季度评审一次技术雷达，哪些组件升级、哪些降级、哪些引入、哪些下线。</p>
+      <p>对应章节：<a href="architecture.html">总体架构</a>、<a href="observability.html">可观测</a>（迭代依据来自监控指标）。</p>
+
+      <h3>职责二：负责技术选型与数据分层、存储规范、冷热策略、版本治理</h3>
+      <p><strong>考察点</strong>：三层意思——分层（ODS / DWD / DWS / ADS 各层职责与粒度约定）；存储规范（命名、分区、文件大小、表格式版本，如 format-version=2 与 target-file-size 的平台默认值）；冷热策略（介质分层 + TTL + 生命周期任务）；版本治理（Schema 演进流程、表属性变更评审、快照过期策略）。这条考「平台立法能力」。</p>
+      <p>对应章节：<a href="architecture.html">总体架构</a>（选型方法论）、<a href="storage.html">存储层</a>（表格式与分区规范）、<a href="governance.html">数据治理</a>（版本与生命周期）。</p>
+
+      <h3>职责三：基于 Iceberg / ClickHouse / Doris 构建统一存储底座，支撑本体建模、数据流水线、AI 检索与时空分析</h3>
+      <p><strong>考察点</strong>：三引擎的分工是否清晰（Iceberg 做事实源、ClickHouse 做时序热层、Doris 做高并发多维分析）；更关键的是「支撑上层场景」——本体建模（实体/关系表设计）、数据流水线（CDC + 调度）、AI 检索（原文向量同库）、时空分析（网格分区）。这条是区分「平台运维」与「架构师」的分水岭。</p>
+      <p>对应章节：<a href="storage.html">存储层</a>、<a href="query.html">查询层</a>、<a href="scenarios.html">场景实战</a>（五类场景逐一对号）。</p>
+
+      <h3>职责四：负责性能调优——小文件治理、Compaction 调度、查询加速与资源隔离</h3>
+      <p><strong>考察点</strong>：写入端（文件大小、并行度、提交频率）、存储端（Compaction 与快照过期）、查询端（分区裁剪、缓存、物化视图）三板斧是否成体系；资源隔离（队列拆分、大作业隔离、抢占策略）能否给出量化指标（文件数阈值、队列水位）。</p>
+      <p>对应章节：<a href="optimization.html">性能调优</a>、<a href="scheduling.html">调度资源</a>。</p>
+
+      <h3>职责五：制定入湖规范，建设数据质量、权限、生命周期与灾备体系</h3>
+      <p><strong>考察点</strong>：治理四件套的落地——入湖规范（各模态格式/分区/质量规则，见场景实战的统一规范表）；质量分层（入湖前校验、加工中断言、出库前核验）；权限（Ranger 行列级 + Catalog 级联）；生命周期与灾备（TTL、快照保留、RTO/RPO 与演练制度）。</p>
+      <p>对应章节：<a href="integration.html">数据集成</a>（入湖规范与质量前置）、<a href="governance.html">数据治理</a>、<a href="observability.html">可观测</a>。</p>
+
+      <h3>职责六：支撑上层业务场景——报表、风控、AI 与检索</h3>
+      <p><strong>考察点</strong>：架构师懂不懂业务消费模式：报表要口径统一与高并发，风控要多源融合与图研判，AI 与检索要原文向量同库与权限过滤。场景决定底座形态，「只谈组件不谈场景」的候选人会被判为纸面架构师。</p>
+      <p>对应章节：<a href="scenarios.html">场景实战</a>、<a href="query.html">查询层</a>。</p>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：回答 JD 相关问题时用统一句式——「我们当时的约束是…，我权衡了 A 和 B，选择了 A，代价是…，结果是…（量化数据）」。架构师面试拼的是决策叙事的完整性，不是名词量。
+      </div>
+
+      <!-- ================= 三、信创国产化适配 ================= -->
+      <h2 id="xinchuang">信创国产化适配</h2>
+      <p>信创（信息技术应用创新）环境下，大量政企项目的数据库要求替换为国产产品。好消息是：湖仓架构师手里的底座本来就是开放的——只要在 DB 与应用之间保留一层适配抽象，PostgreSQL 系国产数据库就可以平滑换入。先认识三个主流 PG 系国产库：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>产品</th>
+            <th>出品方</th>
+            <th>技术路线</th>
+            <th>架构师关注点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>openGauss</td>
+            <td>华为开源</td>
+            <td>源自 PostgreSQL 内核深度增强：MOT 内存引擎、Ustore 存储引擎、AI 自调优等</td>
+            <td>金融政企落地多；内核与社区 PG 存在代际差异，扩展兼容需逐项验证</td>
+          </tr>
+          <tr>
+            <td>KingbaseES</td>
+            <td>人大金仓</td>
+            <td>PG 内核 + Oracle 兼容模式，面向政企迁移场景</td>
+            <td>从 Oracle 迁移项目的常客；兼容模式≠100%，SQL 改写量要提前评估</td>
+          </tr>
+          <tr>
+            <td>PolarDB</td>
+            <td>阿里云</td>
+            <td>云原生：计算存储分离、一写多读，提供 PG 兼容形态</td>
+            <td>适合云上湖仓的元数据与业务库；弹性与成本模型与传统部署不同</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>PG 在湖仓中的三类角色</h3>
+      <ol>
+        <li><strong>元数据库</strong>：Hive Metastore 后端库、Iceberg JDBC Catalog、调度 / 质量 / 血缘组件的元存储。天然要求高可用（主备）与定期备份——它挂了整个湖仓的元数据入口就挂了。</li>
+        <li><strong>业务库</strong>：中小型事务业务与报表出口，同时是湖仓 CDC 的源头库之一（Flink CDC 从 PG 直达 Iceberg，见 <a href="integration.html">数据集成</a>）。</li>
+        <li><strong>PostGIS 时空库</strong>：空间数据在线服务层（围栏判定、周边查询，见 <a href="scenarios.html">场景实战</a> 的 GIS 章节）；叠加 pgvector 后还能承担 RAG 检索投影——一库三用，是中小团队成本最优雅的 PG 用法。</li>
+      </ol>
+
+      <h3>适配层设计</h3>
+      <div class="arch-layer">应用与 SQL 层：遵循 ANSI SQL 兼容规范，禁用数据库私有方言，从源头降低替换成本</div>
+      <div class="arch-layer">Catalog 抽象层：逻辑名与物理实现解耦，JDBC 配置注入，业务代码零改动</div>
+      <div class="arch-layer">数据库层：PostgreSQL → openGauss / KingbaseES / PolarDB 按需替换</div>
+
+      <pre><code><span class="comment"># catalog 抽象（配置示意）：业务与作业只引用逻辑名，底层实现通过配置注入、可整体替换</span>
+catalogs:
+  lakehouse-meta:                       <span class="comment"># 逻辑名 1：湖仓元数据库</span>
+    driver: org.postgresql.Driver       <span class="comment"># 切换 openGauss 时改为 org.opengauss.Driver</span>
+    url: jdbc:postgresql://meta-node:5432/metastore
+    validation: SELECT 1
+  business-erp:                         <span class="comment"># 逻辑名 2：业务库（CDC 源 / 报表出口）</span>
+    driver: org.postgresql.Driver       <span class="comment"># 切换 KingbaseES 时改为 com.kingbase8.Driver</span>
+    url: jdbc:postgresql://biz-node:5432/erp</code></pre>
+
+      <pre><code>// 驱动替换：业务代码只面向 java.sql.* 标准接口与逻辑 catalog
+String driver = cfg.get("catalogs.business-erp.driver");  <span class="comment">// org.postgresql.Driver -&gt; com.kingbase8.Driver</span>
+String url    = cfg.get("catalogs.business-erp.url");     <span class="comment">// jdbc:postgresql://... -&gt; jdbc:kingbase8://...</span>
+Class.forName(driver);
+try (Connection conn = DriverManager.getConnection(url, user, pwd)) {
+    // 业务逻辑不感知底层数据库品牌
+}</code></pre>
+
+      <pre><code>-- 方言改写示例 1：upsert —— MySQL 私有语法改写为 PG 系通用写法
+<span class="comment">-- 迁移前（MySQL）</span>
+INSERT INTO biz.customer_rank(customer_id, rank_level)
+VALUES (1001, 'VIP')
+ON DUPLICATE KEY UPDATE rank_level = 'VIP';
+
+<span class="comment">-- 迁移后（PG 系通用）</span>
+INSERT INTO biz.customer_rank(customer_id, rank_level)
+VALUES (1001, 'VIP')
+ON CONFLICT (customer_id) DO UPDATE SET rank_level = EXCLUDED.rank_level;
+
+-- 方言改写示例 2：标识符 —— 反引号统一为“小写 + 不加引号”，规避大小写敏感差异
+SELECT `user_id`, `order_amount` FROM `biz`.`orders`;   <span class="comment">-- 迁移前</span>
+SELECT user_id, order_amount FROM biz.orders;           <span class="comment">-- 迁移后：写入平台 SQL 规范并纳入评审</span></code></pre>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：① 内核代际差异——openGauss 基于早期 PG 内核重构，社区 PG 的新语法、新函数、新扩展不可想当然可用，逐项验证再承诺；② 扩展生态——PostGIS / pgvector 在各国产库的版本支持情况不同，时空与 RAG 场景务必先行实测；③ 性能基线——信创整机（ARM/x86 + 国产 OS）上的 TPC 类压测结果与通用环境差异大，容量规划须重新测量；④ 连接与驱动——超时参数、预编译语义、连接池行为（如 prepareThreshold）迁移时逐项核对；⑤ 切换策略——灰度双写或影子库过渡，保留回滚窗口，不做一次性硬切。
+      </div>
+
+      <!-- ================= 四、AI+湖仓融合 ================= -->
+      <h2 id="ai-lakehouse">AI+湖仓融合</h2>
+      <p>AI 是湖仓架构的下一跳，也是架构师简历差异化的最大机会。融合底座正在沿三个方向演进：</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>向量原生底座</h3>
+          <p>存储与查询引擎内建向量类型与 ANN 索引（pgvector 成熟、Doris 等分析引擎快速跟进）：原文、向量、标量在同一引擎内完成混合检索，不再强依赖独立向量服务。</p>
+          <a class="card-link" href="scenarios.html">场景实战 →</a>
+        </div>
+        <div class="card">
+          <h3>统一元数据</h3>
+          <p>表、指标、模型、向量索引、血缘在同一个 Catalog 登记：数据资产与 AI 资产一体治理——「这张知识表被哪个 RAG 应用消费」与「哪张表被哪个报表消费」用同一套血缘回答。</p>
+          <a class="card-link" href="governance.html">数据治理 →</a>
+        </div>
+        <div class="card">
+          <h3>语义层</h3>
+          <p>指标口径统一（Headless BI / 语义建模）：ChatBI 与自然语言取数建立在语义层之上，而不是让大模型直接「猜表」——AI 可信的前提是口径先可信。</p>
+          <a class="card-link" href="query.html">查询层 →</a>
+        </div>
+      </div>
+
+      <h3>学习路径建议</h3>
+      <ol>
+        <li><strong>先掌握场景</strong>：把 <a href="scenarios.html">场景实战</a> 五类场景过一遍——先知道底座「怎么被 AI 消费」，再谈融合；</li>
+        <li><strong>再学向量索引原理</strong>：HNSW 的图构建与搜索、IVF 系列的聚簇与重排、召回率-延迟-内存三角的量化评测方法；</li>
+        <li><strong>动手搭 RAG over Lakehouse</strong>：pgvector 检索投影 + Iceberg 原文表 + 权限过滤 + 引用溯源，端到端跑通并建立评测集；</li>
+        <li><strong>再看语义层与 ChatBI</strong>：把指标口径治理与 AI 消费连起来，理解「语义层是 AI 取数的防幻觉地基」。</li>
+      </ol>
+
+      <div class="callout">
+        <strong>提醒</strong>：先别急着上「AI 平台」。RAG 的下限是检索、上限是治理：分块策略、嵌入模型评测集、TopK 与重排消融这三件事做扎实，比任何平台采购都先产生价值。
+      </div>
+
+      <!-- ================= 五、高频面试题 ================= -->
+      <h2 id="interview">高频面试题</h2>
+      <p>8 道湖仓架构师岗位的高频题。每题给的是<strong>答题思路</strong>——面试官要的是结构化思维与场景绑定的结论，不是背诵的标准答案。</p>
+
+      <h3>问题一：为什么选 Iceberg，而不是 Hudi / Delta Lake？</h3>
+      <ul>
+        <li><strong>先立评价框架</strong>：元数据扩展性（快照/清单文件规模）、分区与 Schema 演进、多引擎中立性、更新模型（COW/MOR/upsert）、生态与社区；</li>
+        <li><strong>再绑定自家场景给结论</strong>：数据规模大 + 引擎多元（Spark/Flink/Trino/Doris 共读）+ 需要隐藏分区与分区演进 → Iceberg；记录级高频 upsert 与增量流式消费为主 → Hudi；深度绑定 Databricks 生态 → Delta 顺理成章；</li>
+        <li><strong>加分项</strong>：提到 v2 delete 文件与 MERGE INTO 路径、bucket 分区对 join/shuffle 的优化、REST Catalog 的多云演进。</li>
+      </ul>
+
+      <h3>问题二：小文件问题如何治理？</h3>
+      <ul>
+        <li><strong>按层答</strong>：成因（高频流式提交、分区过细）→ 写入端（target-file-size、提交频率与并行度对齐）→ 存储端（rewrite_data_files 定期 Compaction、COW/MOR 的读放大权衡）→ 治理端（文件数与平均大小监控、快照过期 expire_snapshots）；</li>
+        <li><strong>量化</strong>：给出平台阈值——例如「单分区数据文件数超过阈值」触发自动合并告警；</li>
+        <li><strong>兜底</strong>：把小文件治理做成平台自动运维（调度系统定期执行），而不是等故障后人肉救火。</li>
+      </ul>
+
+      <h3>问题三：批流一体怎么落地？</h3>
+      <ul>
+        <li><strong>三层统一</strong>：存储统一（同一张 Iceberg 表，快照隔离解决并发读写）→ 计算统一（Flink 流批一体或 Spark Structured Streaming）→ 语义统一（事件时间、水位线、回溯重放）；</li>
+        <li><strong>落地路径</strong>：从 Lambda 起步平滑演进，两套口径用统一校验任务对齐，条件成熟再收编为流主链路；</li>
+        <li><strong>避坑</strong>：批流一体≠强行一套代码，先统一「表」与「口径」，再谈统一「作业」。</li>
+      </ul>
+
+      <h3>问题四：Exactly-Once 端到端如何保证？</h3>
+      <ul>
+        <li><strong>链路分段作答</strong>：源端可重放（Kafka offset / CDC 位点）→ 计算端两阶段提交（Flink Checkpoint + 事务性 Sink）→ 写入端幂等（Iceberg 主键 MERGE INTO，或提交 ID 去重）→ 下游消费幂等；</li>
+        <li><strong>核心口径</strong>：端到端 Exactly-Once = 每一段要么事务、要么幂等，缺一段则整体退化为 At-Least-Once；</li>
+        <li><strong>加分项</strong>：主动谈故障重放演练——幂等性是「设计出来的」，也要「演练验证过的」。</li>
+      </ul>
+
+      <h3>问题五：Trino / Doris / ClickHouse 怎么选？</h3>
+      <ul>
+        <li><strong>场景优先而非产品排名</strong>：多源联邦 + 中等并发交互分析 → Trino；高并发固定多维报表、需要 Join 与实时更新 → Doris；大宽表扫描、监控时序、超高写入吞吐 → ClickHouse；</li>
+        <li><strong>底座视角</strong>：三者都通过统一 Catalog 共享湖仓数据，底座不搬家，引擎可替换、可并存；</li>
+        <li><strong>加分项</strong>：给出「同一份数据两种引擎各自建模压测」的决策依据，而不是「我觉得 X 快」。</li>
+      </ul>
+
+      <h3>问题六：Compaction 调度策略怎么设计？</h3>
+      <ul>
+        <li><strong>触发条件</strong>：指标驱动（文件数/平均大小/读放大）+ 时间兜底（每日低峰强制），双保险；</li>
+        <li><strong>策略分层</strong>：数据合并（rewrite_data_files）、快照过期（expire_snapshots）、孤儿文件清理（remove_orphan_files）三类作业分离调度，避免互相放大资源占用；</li>
+        <li><strong>资源纪律</strong>：独立队列 + 并发上限 + 避开查询高峰；Compaction 积压量纳入监控告警；与写入端（Flink Checkpoint 周期）联动考虑提交频率。</li>
+      </ul>
+
+      <h3>问题七：容量规划怎么做？</h3>
+      <ul>
+        <li><strong>方法先行</strong>：数据量推算（日增 × 保留期 × 副本/纠删码 × 压缩比，冷热分层后分别估算）→ 元数据规模（文件数与快照数对 Catalog 的压力）→ 计算资源（按作业画像估 CPU 小时/内存/队列水位）→ 增长与峰值（年增长、大促/月末）；</li>
+        <li><strong>降本三件套</strong>：生命周期管理、压缩与编码优化、弹性伸缩——容量规划永远是「先压测量、再加系数」，不做拍脑袋预算；</li>
+        <li><strong>加分项</strong>：给出你监控水位的具体指标（对象存储用量增速、队列利用率、Compaction 积压）。</li>
+      </ul>
+
+      <h3>问题八：灾备方案怎么设计？</h3>
+      <ul>
+        <li><strong>指标先行</strong>：按业务分级定义 RTO/RPO（平台级 vs 表级），不同等级不同投入；</li>
+        <li><strong>湖仓特有逻辑</strong>：存储层（对象存储多副本/纠删码、跨区复制或双活）+ 元数据层（Catalog 库主备 + 定期导出快照/清单文件备份）+ 链路层（Kafka 双机房镜像、源端可重放窗口）；</li>
+        <li><strong>计算层哲学</strong>：湖仓的作业无状态、可重放——灾备重点收敛到「存储 + 元数据」两件事；</li>
+        <li><strong>收尾必谈演练</strong>：每季度真实切换演练 + 核对行数/校验和，没演练过的灾备方案默认不可用。</li>
+      </ul>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：每道题都按「框架 → 场景绑定结论 → 量化结果 → 踩过的坑」四段展开。面试官听到结构化叙事会判定你「真做过」，听到名词堆砌会判定你「背过」。
+      </div>
+
+      <!-- ================= 六、90 天学习计划 ================= -->
+      <h2 id="plan-90">90 天学习计划</h2>
+      <p>三阶段 12 周：第 1 月夯底座（存储 + 计算），第 2 月通链路（查询 + 集成 + 调度 + 可观测），第 3 月上价值（治理 + 调优 + 场景实战）。每周主题对应本站章节，每周产出物是一个<strong>可运行、可复现的实践项目</strong>。</p>
+
+      <div class="diagram">
+        <svg width="760" height="200" viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="90 天三阶段进阶路线图">
+          <defs>
+            <marker id="plan-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 z" fill="#334155"></path>
+            </marker>
+          </defs>
+          <rect x="20" y="110" width="220" height="52" rx="8" fill="#14b8a6"></rect>
+          <text x="130" y="132" text-anchor="middle" fill="#ffffff" font-size="13">第 1 月</text>
+          <text x="130" y="150" text-anchor="middle" fill="#ecfeff" font-size="11">存储底座 + 计算引擎</text>
+          <line x1="242" y1="136" x2="266" y2="96" stroke="#334155" stroke-width="2" marker-end="url(#plan-arrow)"></line>
+          <rect x="270" y="70" width="220" height="52" rx="8" fill="#0f766e"></rect>
+          <text x="380" y="92" text-anchor="middle" fill="#ffffff" font-size="13">第 2 月</text>
+          <text x="380" y="110" text-anchor="middle" fill="#d1fae5" font-size="11">查询 · 集成 · 调度 · 可观测</text>
+          <line x1="492" y1="96" x2="516" y2="56" stroke="#334155" stroke-width="2" marker-end="url(#plan-arrow)"></line>
+          <rect x="520" y="30" width="220" height="52" rx="8" fill="#155e75"></rect>
+          <text x="630" y="52" text-anchor="middle" fill="#ffffff" font-size="13">第 3 月</text>
+          <text x="630" y="70" text-anchor="middle" fill="#cffafe" font-size="11">治理 · 调优 · 场景实战</text>
+          <text x="380" y="185" text-anchor="middle" fill="#64748b" font-size="12">每周一个可运行实践项目 · 周末复盘输出笔记与代码</text>
+        </svg>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>周次</th>
+            <th>主题与要点</th>
+            <th>对应章节</th>
+            <th>实践项目建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="4">第 1 月<br>底座</td>
+            <td>W1</td>
+            <td>总体架构与六层参考架构，建立全局地图</td>
+            <td><a href="architecture.html">总体架构</a></td>
+            <td>画出自家系统的六层映射图，标注每层组件与最短板</td>
+          </tr>
+          <tr>
+            <td>W2</td>
+            <td>对象存储与 Parquet：行组、列裁剪、压缩与编码</td>
+            <td><a href="storage.html">存储层</a></td>
+            <td>MinIO 搭 S3 兼容存储；对比 Parquet 行组大小对扫描量的影响</td>
+          </tr>
+          <tr>
+            <td>W3</td>
+            <td>Iceberg 深潜：分区/快照/回滚/MERGE INTO 与演进</td>
+            <td><a href="storage.html">存储层</a></td>
+            <td>建表并完整演练一次分区演进 + 快照回滚 + 过期清理</td>
+          </tr>
+          <tr>
+            <td>W4</td>
+            <td>计算引擎：Spark 批与 Flink 流写同一张表</td>
+            <td><a href="compute.html">计算层</a></td>
+            <td>Spark 批写 + Flink 流式 upsert 同一张 Iceberg 表，验证快照隔离并发</td>
+          </tr>
+          <tr>
+            <td rowspan="4">第 2 月<br>链路</td>
+            <td>W5</td>
+            <td>Trino 联邦查询：catalog 配置、执行计划与缓存</td>
+            <td><a href="query.html">查询层</a></td>
+            <td>Trino 挂 Iceberg catalog，跑跨源 Join 并 EXPLAIN 分析裁剪效果</td>
+          </tr>
+          <tr>
+            <td>W6</td>
+            <td>Doris 与 ClickHouse：建模、索引与物化视图</td>
+            <td><a href="query.html">查询层</a></td>
+            <td>两种引擎对同一份数据分别建模，压测并发与扫描对比</td>
+          </tr>
+          <tr>
+            <td>W7</td>
+            <td>数据集成：Flink CDC、Schema 演进、Exactly-Once</td>
+            <td><a href="integration.html">数据集成</a></td>
+            <td>PG → Iceberg 的 CDC 链路，演练断点续传与表结构变更</td>
+          </tr>
+          <tr>
+            <td>W8</td>
+            <td>调度与可观测：DAG 编排、队列配额、监控大盘</td>
+            <td><a href="scheduling.html">调度资源</a> · <a href="observability.html">可观测</a></td>
+            <td>DolphinScheduler 编排全链路 DAG + Grafana 搭平台监控大盘</td>
+          </tr>
+          <tr>
+            <td rowspan="4">第 3 月<br>价值</td>
+            <td>W9</td>
+            <td>数据治理：入湖规范、质量规则、权限与生命周期</td>
+            <td><a href="governance.html">数据治理</a></td>
+            <td>为 W7 链路补齐质量校验任务、Ranger 权限矩阵与 TTL 策略</td>
+          </tr>
+          <tr>
+            <td>W10</td>
+            <td>性能调优：小文件、Compaction、查询加速、资源隔离</td>
+            <td><a href="optimization.html">性能调优</a></td>
+            <td>故意制造小文件与读放大，完整治理一遍并记录前后指标</td>
+          </tr>
+          <tr>
+            <td>W11</td>
+            <td>场景实战：本体 / RAG / 时序 / 时空 / 图任选其一</td>
+            <td><a href="scenarios.html">场景实战</a></td>
+            <td>推荐 RAG：pgvector + Iceberg 原文 + 权限过滤端到端跑通</td>
+          </tr>
+          <tr>
+            <td>W12</td>
+            <td>综合复盘：作品集整理 + 面试题闭环</td>
+            <td><a href="career.html">岗位进阶</a></td>
+            <td>复盘 12 周产出物，整理作品集并写下 8 道高频题的个人答案</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：产出物导向——每周固定产出「一篇复盘笔记 + 一段可复现代码/配置」，12 周后这些就是你的面试作品集与「真做过」的证据链。宁可少读两章文档，不可缺一周产出。
+      </div>
+
+      <p>至此全站闭环：<a href="architecture.html">总体架构</a> 给地图，中间九章给武器，<a href="scenarios.html">场景实战</a> 给战场，本页给战场之外的职业路线。祝你成为真正的湖仓架构师。</p>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

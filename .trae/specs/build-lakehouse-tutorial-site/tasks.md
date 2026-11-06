@@ -1,0 +1,42 @@
+# Tasks
+
+- [x] Task 1: 搭建网站骨架与共享资源
+  - [ ] 创建 `site/` 目录结构（css/、js/）
+  - [ ] 编写 `site/css/style.css`：统一视觉风格、导航栏、代码块、表格、响应式布局
+  - [ ] 编写 `site/js/main.js`：导航当前页高亮、移动端菜单切换、返回顶部
+- [x] Task 2: 编写首页与总体架构页
+  - [ ] `index.html`：湖仓一体简介、六层技术栈全景、学习路线图、页面导航卡片
+  - [ ] `architecture.html`：分层架构、批流一体设计、Palantir 体系支撑（本体建模/流水线/AI检索/时空分析）、技术选型方法论
+- [x] Task 3: 编写存储与表格式层页面 `storage.html`
+  - [ ] Apache Iceberg（表格式原理、快照、隐藏分区、时间旅行）
+  - [ ] HDFS 与 S3/MinIO 对象存储
+  - [ ] Hive Metastore 在多引擎场景下的能力边界
+- [x] Task 4: 编写计算引擎层页面 `compute.html`
+  - [ ] Apache Spark（批处理、与 Iceberg 集成、调优）
+  - [ ] Apache Flink（流处理、Checkpoint、与 Iceberg 集成）
+  - [ ] 批流一体架构设计与调优
+- [x] Task 5: 编写查询引擎层页面 `query.html`
+  - [ ] Trino（联邦查询、与 Iceberg/Doris 对比定位）
+  - [ ] Apache Doris（明细+聚合模型、湖仓查询加速）
+  - [ ] ClickHouse（时序/日志分析、适用边界）
+- [x] Task 6: 编写数据集成层页面 `integration.html`
+  - [ ] Apache Kafka（分区/副本/容量规划）
+  - [ ] Flink CDC（实时入湖链路、Exactly-Once）
+  - [ ] 实时链路架构设计与容量规划方法
+- [x] Task 7: 编写调度与资源层、可观测性层页面
+  - [ ] `scheduling.html`：DolphinScheduler（DAG 编排）、YARN（队列/资源隔离/标签）
+  - [ ] `observability.html`：Prometheus+Grafana 指标与告警体系、Filebeat→ES→Kibana 日志链路
+- [x] Task 8: 编写数据治理与性能调优页面
+  - [ ] `governance.html`：入湖规范、质量校验、权限体系（Ranger/行级列级）、冷热策略、生命周期、灾备恢复
+  - [ ] `optimization.html`：小文件治理、Compaction 调度、查询加速（缓存/物化视图/排序）、资源隔离、瓶颈排查与容量规划
+- [x] Task 9: 编写高阶场景与岗位能力页面
+  - [ ] `scenarios.html`：情报研判、AI 向量检索、时序分析、GIS 时空、图计算、多模数据统一治理
+  - [ ] `career.html`：架构师能力模型、信创 PG 适配、AI+湖仓融合、面试要点
+- [x] Task 10: 整体验证
+  - [x] 校验全部 12 个页面链接有效、共享样式一致、file:// 直开可浏览
+  - [x] 浏览器渲染验证（导航高亮、响应式、代码块样式）
+
+# Task Dependencies
+- Task 2 ~ 9 均依赖 Task 1（共享 CSS/JS 与页面骨架模板）
+- Task 2 ~ 9 相互独立，可并行
+- Task 10 依赖 Task 2 ~ 9 全部完成

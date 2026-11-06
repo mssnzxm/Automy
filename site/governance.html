@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据治理与规范 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <!-- 本页导航目录（sticky 侧栏） -->
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本层定位</a>
+      <a href="#lake-standards">数据入湖规范</a>
+      <a href="#quality">质量校验</a>
+      <a href="#security">权限体系</a>
+      <a href="#hot-cold">冷热数据策略</a>
+      <a href="#lifecycle">数据生命周期</a>
+      <a href="#disaster-recovery">灾备恢复机制</a>
+      <a href="#metrics">治理度量</a>
+    </aside>
+
+    <!-- 正文内容区 -->
+    <main class="content">
+
+      <h1>数据治理与规范</h1>
+      <div class="page-intro">
+        本页系统讲解湖仓一体平台的数据治理体系：从入湖规范、质量校验、Ranger 权限体系，到冷热分层、生命周期、灾备恢复与治理度量。
+        学完你将掌握让一个湖仓平台在数百张表、数十个消费方规模下长期稳定运行、可审计、可恢复的治理方法论与落地配置。
+      </div>
+
+      <h2 id="intro">本层定位</h2>
+      <p>如果存储层与计算层是湖仓的"骨骼与肌肉"，治理就是让这座建筑在风雨中站得稳的<strong>地基与承重结构</strong>。缺少治理的湖仓，初期跑得飞快，但通常在接入第 50 张表、第 5 个业务方之后开始劣化：表命名混乱、口径各说各话、敏感字段裸奔、对象存储里躺着 40% 的僵尸文件、误删一张表后无人能恢复。治理不是上线后的"补课"，而是与建表同天启动的工程纪律。</p>
+      <p>湖仓一体场景下的治理与传统数仓有一个本质差异：<strong>存储与计算分离后，数据不再处于某个数据库进程的"院子"里，而是躺在对象存储的开放目录中</strong>。任何拿到凭证的引擎都能直接读写。因此治理必须从"数据库自带能力"升级为"平台级显式能力"——元数据、权限、生命周期、灾备全部要显式建设。本教程把治理体系归纳为五大支柱：</p>
+
+      <div class="arch-layer">规范支柱：分层 / 命名 / 建模标准，让资产可读可检索</div>
+      <div class="arch-layer">质量支柱：规则化校验 + 质量分 + 熔断，让数据可信</div>
+      <div class="arch-layer">安全支柱：Ranger 集中鉴权 + 行列级控制，让访问可控</div>
+      <div class="arch-layer">生命周期支柱：冷热分层 / TTL / 归档销毁，让成本可持续</div>
+      <div class="arch-layer">灾备支柱：时间旅行 / 版本控制 / 跨集群备份，让故障可恢复</div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>规范</h3>
+          <p>入湖即登记：分层命名模板、元数据注册流程、入湖前检查清单，保证"生得规范"。</p>
+        </div>
+        <div class="card">
+          <h3>质量</h3>
+          <p>五类规则 + Spark SQL 实现 + 质量分熔断，保证"产得正确"，错误数据不出 ODS。</p>
+        </div>
+        <div class="card">
+          <h3>安全</h3>
+          <p>Ranger 统一管控 HDFS/Hive/Trino 三层入口，库表/行/列三级权限边界清晰。</p>
+        </div>
+        <div class="card">
+          <h3>生命周期</h3>
+          <p>分区级 TTL、冷热迁移、归档销毁，元数据先行，保证"走得体面"。</p>
+        </div>
+        <div class="card">
+          <h3>灾备</h3>
+          <p>时间旅行、快照保留、对象存储版本控制、跨集群备份，RTO/RPO 有据可依。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>提示</strong>：五大支柱彼此咬合——规范是质量的输入（没有字段分级就写不出脱敏规则），质量是生命周期的输入（低质量数据提前降冷），灾备是全部支柱的保险。实施顺序建议：规范 → 安全 → 质量 → 生命周期 → 灾备。
+      </div>
+
+      <h2 id="lake-standards">数据入湖规范</h2>
+      <p>所有数据进入湖仓的第一天就要"上户口"。入湖规范解决三个问题：这张表叫什么、归谁管、放在哪一层。下面是推荐的分层命名规范，其中 ODS 贴源层保留原貌，DWD 明细层做清洗标准化，DWS 汇总层面向主题预聚合，ADS 应用层直接服务报表与接口。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>定位</th>
+            <th>命名模板</th>
+            <th>示例</th>
+            <th>典型保留期</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">ODS</span></td>
+            <td>贴源层，原样落地，不做清洗</td>
+            <td><code>lake.ods_业务域_源系统_表名</code></td>
+            <td><code>lake.ods_trade_mysql_ord</code></td>
+            <td>90 天</td>
+          </tr>
+          <tr>
+            <td><span class="pill">DWD</span></td>
+            <td>明细层，清洗、标准化、拉链</td>
+            <td><code>lake.dwd_业务域_主题_实体</code></td>
+            <td><code>lake.dwd_trade_order_di</code></td>
+            <td>1 年</td>
+          </tr>
+          <tr>
+            <td><span class="pill">DWS</span></td>
+            <td>汇总层，宽表与预聚合</td>
+            <td><code>lake.dws_业务域_主题_粒度_周期</code></td>
+            <td><code>lake.dws_trade_user_1d</code></td>
+            <td>长期</td>
+          </tr>
+          <tr>
+            <td><span class="pill">ADS</span></td>
+            <td>应用层，直接对接报表/接口</td>
+            <td><code>lake.ads_应用_场景</code></td>
+            <td><code>lake.ads_dashboard_gmv</code></td>
+            <td>随应用</td>
+          </tr>
+          <tr>
+            <td><span class="pill">DIM</span></td>
+            <td>维表层，公共维表</td>
+            <td><code>lake.dim_业务域_实体</code></td>
+            <td><code>lake.dim_trade_sku</code></td>
+            <td>长期</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>元数据注册流程</h3>
+      <p>新表必须先登记再投产。一条登记记录包含业务与技术两类属性，落在元数据平台（自研表或 DataHub/Atlas）中，审批通过后 CI 流水线才允许执行建表语句：</p>
+      <ol>
+        <li><strong>表登记</strong>：提交建表申请，含中文名、业务描述、字段口径、层级（ods/dwd/dws/ads）、Schema 草案；</li>
+        <li><strong>指定负责人</strong>：明确 owner（业务负责人）与 DBA（技术负责人），两者缺一不可，负责人离职须先过户再销号；</li>
+        <li><strong>数据分级</strong>：按字段标记敏感等级（L1 公开 / L2 内部 / L3 敏感 / L4 机密），手机号、身份证等字段强制 L3+，等级直接驱动脱敏与审计策略；</li>
+        <li><strong>权限申请</strong>：消费者向 owner 发起授权申请，审批通过后由 Ranger 策略自动下发，杜绝"先跑 SQL 再补权限"。</li>
+      </ol>
+
+      <pre><code>-- 表注释与字段注释是元数据注册的一部分，建表时强制填写
+CREATE TABLE lake.dwd_trade_order_di (
+  order_id      STRING COMMENT '订单号，主键',
+  user_id       STRING COMMENT '用户ID，关联 dim_user',
+  order_amount  DECIMAL(16, 2) COMMENT '订单实付金额，含运费，单位元',
+  pay_status    TINYINT  COMMENT '支付状态 0待支付 1已支付 2已退款',
+  <span class="comment">-- 手机号属于 L3 敏感字段，注册时须标记，Ranger 将对非授权角色脱敏</span>
+  buyer_phone   STRING COMMENT '买家手机号 [L3]',
+  dt            STRING COMMENT '业务日期分区 yyyy-MM-dd'
+)
+USING ICEBERG
+PARTITIONED BY (days(dt))
+COMMENT '交易域-订单明细日增表，owner=trade-team，分级=L2';</code></pre>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：入湖前检查清单（缺一项即打回）——① 命名符合层级模板；② 表/字段中英文注释齐全；③ owner 与 DBA 已确认；④ 敏感字段完成分级标记；⑤ 分区键与查询模式匹配（详见性能调优页）；⑥ 建表走 CI 审批而非手工执行；⑦ 已定义保留期与降冷策略；⑧ 已声明上游依赖与血缘。
+      </div>
+
+      <h2 id="quality">质量校验</h2>
+      <p>数据质量校验（DQC）的目标只有一个：<strong>不让错误数据流向下游</strong>。规则按可度量的维度分类，每条规则最终都是一条可执行的 SQL，交给调度系统在任务后置节点运行，结果写入质量结果表，触发告警或熔断。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>校验问题</th>
+            <th>示例 SQL（判定条件）</th>
+            <th>典型阈值</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">完整性</span></td>
+            <td>该有的记录齐了吗？关键字段空了吗？</td>
+            <td><code>SELECT count(*) FROM t WHERE order_id IS NULL</code></td>
+            <td>主键空值 = 0</td>
+          </tr>
+          <tr>
+            <td><span class="pill">唯一性</span></td>
+            <td>主键/业务键是否重复？</td>
+            <td><code>SELECT order_id FROM t GROUP BY order_id HAVING count(*) &gt; 1</code></td>
+            <td>重复数 = 0</td>
+          </tr>
+          <tr>
+            <td><span class="pill">一致性</span></td>
+            <td>跨表口径是否对得上？</td>
+            <td><code>SELECT a.amt - b.amt FROM dwd a JOIN dws b ON ...</code></td>
+            <td>差异率 &lt; 0.1%</td>
+          </tr>
+          <tr>
+            <td><span class="pill">及时性</span></td>
+            <td>分区到位了吗？调度完成了吗？</td>
+            <td><code>SELECT count(*) FROM t WHERE dt = '${today}'</code></td>
+            <td>7 点前分区就绪</td>
+          </tr>
+          <tr>
+            <td><span class="pill">有效性</span></td>
+            <td>取值在枚举/范围内吗？</td>
+            <td><code>SELECT count(*) FROM t WHERE pay_status NOT IN (0,1,2)</code></td>
+            <td>非法值 = 0</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>落地方式：调度系统 + Spark SQL</h3>
+      <p>推荐用 DolphinScheduler 的<strong>后置检查任务（SQL 类型）</strong>挂接在产出任务之后：产出任务成功后自动执行质量 SQL，把命中数写入结果表 <code>dqc.dqc_check_result</code>，再由一个监控任务统一判断是否告警/熔断。这样质量规则与业务代码解耦，规则可以由数据 PM 在界面维护。</p>
+
+      <pre><code>-- ========== 规则 1：主键重复检测（强规则，命中即熔断）==========
+INSERT INTO dqc.dqc_check_result
+SELECT 'lake.dwd_trade_order_di' AS table_name,
+       'uniqueness_pk'           AS rule_code,
+       'dt'                      AS biz_dt,
+       count(*)                  AS violation_cnt,
+       current_timestamp()       AS check_time
+FROM (
+  SELECT order_id
+  FROM lake.dwd_trade_order_di
+  WHERE dt = '${bizdate}'
+  GROUP BY order_id
+  HAVING count(*) &gt; 1            <span class="comment">-- 同一主键出现多行即违规</span>
+) t;
+
+-- ========== 规则 2：空值率检测（弱规则，超阈值告警）==========
+INSERT INTO dqc.dqc_check_result
+SELECT 'lake.dwd_trade_order_di', 'completeness_null', '${bizdate}',
+       CAST(sum(CASE WHEN order_id IS NULL OR user_id IS NULL
+                    THEN 1 ELSE 0 END) AS DOUBLE) / count(*),  <span class="comment">-- 空值率</span>
+       current_timestamp()
+FROM lake.dwd_trade_order_di
+WHERE dt = '${bizdate}';
+<span class="comment">-- 告警条件：null_rate &gt; 0.001（0.1%）</span>
+
+-- ========== 规则 3：波动率检测（趋势规则，防止跑飞/漏跑）==========
+INSERT INTO dqc.dqc_check_result
+SELECT 'lake.dwd_trade_order_di', 'fluctuation_cnt', '${bizdate}',
+       abs(today.cnt - yest.cnt) / yest.cnt,              <span class="comment">-- 相对昨日波动率</span>
+       current_timestamp()
+FROM (SELECT count(*) cnt FROM lake.dwd_trade_order_di WHERE dt = '${bizdate}') today,
+     (SELECT count(*) cnt FROM lake.dwd_trade_order_di WHERE dt = '${bizdate-1}') yest
+WHERE yest.cnt &gt; 0;
+<span class="comment">-- 告警条件：波动率 &gt; 0.3（今日量相对昨日暴涨暴跌超 30%，可能漏跑上游或重复消费）</span></code></pre>
+
+      <pre><code class="language-yaml"><span class="comment"># DolphinScheduler 工作流片段：产出任务 → DQC 检查 → 熔断判断</span>
+tasks:
+  - name: dwd_order_di_etl            <span class="comment"># 1. 业务产出任务</span>
+    type: SPARK
+    sparkParams: "--master yarn --deploy-mode cluster --num-executors 20"
+
+  - name: dqc_uniqueness_pk           <span class="comment"># 2. 后置质量检查（依赖 etl 成功）</span>
+    type: SQL
+    datasource: spark_thrift
+    depTasks: [dwd_order_di_etl]
+    sql: sql/dqc_order_pk.sql         <span class="comment"># 上面的规则 1</span>
+    failRetryTimes: 1
+
+  - name: dqc_gate                     <span class="comment"># 3. 熔断闸门：违规则阻断下游依赖</span>
+    type: SHELL
+    depTasks: [dqc_uniqueness_pk]
+    script: |
+      CNT=$(spark-sql -e "SELECT violation_cnt FROM dqc.dqc_check_result \
+        WHERE table_name='lake.dwd_trade_order_di' AND rule_code='uniqueness_pk' \
+        AND biz_dt='${bizdate}'" | tail -1)
+      if [ "$CNT" -gt 0 ]; then
+        echo "[DQC-FUSE] 主键重复 ${CNT} 条，熔断下游，通知 owner"; exit 1
+      fi</code></pre>
+
+      <h3>质量分与熔断策略</h3>
+      <p>给每张表/每个任务计算 0–100 的<strong>质量分</strong>：所有强规则命中即 0 分直接熔断；弱规则按违规比例扣分。质量分写入元数据平台，作为 SLA 的一部分对外可见。分级处置策略如下：</p>
+      <ul>
+        <li><strong>强规则（阻断）</strong>：主键重复、主键空值、分区缺失——命中即失败，下游全部阻断，15 分钟内电话告警；</li>
+        <li><strong>弱规则（告警）</strong>：空值率、枚举值、一致性差异——超阈值仅告警，任务继续，由 owner 判断是否重跑；</li>
+        <li><strong>趋势规则（观察）</strong>：波动率、同比环比——连续 3 天异常升级为告警，防止大促等正常波动的误报。</li>
+      </ul>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：质量规则"产出即校验、校验即留痕"。结果表按天分区保留 90 天，每周生成质量周报（各域质量分排名），月度回顾把质量分纳入数据团队 KPI。经验上，强规则控制在 3–5 条/表最有效，规则堆太多会让告警疲劳，反而没人看。
+      </div>
+
+      <h2 id="security">权限体系</h2>
+      <p>湖仓的权限要点是"<strong>一处收口，多引擎生效</strong>"。Apache Ranger 作为中央策略管理点，各组件通过插件接入：HDFS 插件控制文件路径读写、Hive 插件（Ranger Hive Plugin / SQL 插件）控制 Spark/Trino 的库表操作、Trino 侧可独立配置 access control。策略在 Ranger Admin 统一维护，插件定期拉取（默认 30 秒），实现"改一处、全集群生效"。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>插件</th>
+            <th>守护入口</th>
+            <th>控制粒度</th>
+            <th>典型策略</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ranger-hdfs-plugin</code></td>
+            <td>NameNode 文件路径</td>
+            <td>目录/文件级</td>
+            <td>仅 ETL 机器人可写 <code>/warehouse/lake</code>，人只读</td>
+          </tr>
+          <tr>
+            <td><code>ranger-hive-plugin</code></td>
+            <td>HiveServer2 / ThriftServer</td>
+            <td>库/表/列级</td>
+            <td>SELECT/CREATE/DROP 按 Group 分权</td>
+          </tr>
+          <tr>
+            <td><code>ranger-trino-plugin</code></td>
+            <td>Trino Coordinator</td>
+            <td>catalog/schema/表/列级</td>
+            <td>分析师仅 SELECT，屏蔽系统查询</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>三级权限模型</h3>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>库表级</strong>：最粗粒度。决定"能不能查这张表"。Ranger 策略按 <code>lake.dwd_trade_*</code> 通配符把 SELECT 授权给 trade-analyst 组，DROP/ALTER 只留给数据平台组。
+        </div>
+        <div class="callout">
+          <strong>行级</strong>：分区/条件过滤。同一个 Group 的人只看到自己大区的数据。借助 Ranger 行过滤（row filter）或视图实现。
+        </div>
+      </div>
+
+      <pre><code>-- ========== 行级权限：按大区过滤（Ranger Row Filter / 视图二选一）==========
+<span class="comment">-- 方式 1：Ranger Row Filter，直接在策略中定义过滤条件 region = 'north'</span>
+<span class="comment">-- 方式 2：建过滤视图，仅把视图授权给北区分析师，基表不授权</span>
+CREATE VIEW lake.dwd_trade_order_north_v AS
+SELECT * FROM lake.dwd_trade_order_di
+WHERE region = 'north' AND dt &gt;= date_sub(current_date(), 92);
+
+-- ========== 列级权限：脱敏（Ranger Masking）==========
+<span class="comment">-- Ranger 对 buyer_phone 勾选 mask_null / mask_show_last_4，非授权用户查询时：</span>
+<span class="comment">--   SELECT buyer_phone FROM ...  返回 *******1234 而非 138****1234 原文</span>
+<span class="comment">-- 授权白名单内的风控组才看到原文。等价的"视图脱敏"写法：</span>
+CREATE VIEW lake.dwd_trade_order_mask_v AS
+SELECT order_id, user_id,
+       concat('*******(', substring(buyer_phone, -4), ')') AS buyer_phone,  <span class="comment">-- 手动脱敏</span>
+       order_amount, pay_status, dt
+FROM lake.dwd_trade_order_di;
+
+-- ========== 库表级：收权演示（管理员在 Ranger 控制台操作，SQL 侧等价语义）==========
+<span class="comment">-- REVOKE 在 Hive 插件生效后，Trino/Hive 侧同步失去访问权</span>
+REVOKE SELECT ON TABLE lake.dwd_trade_order_di FROM GROUP tmp_intern;
+GRANT  SELECT ON TABLE lake.dwd_trade_order_mask_v TO GROUP tmp_intern;</code></pre>
+
+      <h3>Iceberg 下的权限边界</h3>
+      <p>常见误区是以为"换了 Iceberg 表就自动有了权限"。实际上 <strong>Iceberg 只是一个表格式规范，它管快照、管元数据指针，完全不管权限</strong>。鉴权发生在两个层面，两层必须同时守住：</p>
+      <div class="arch-layer">引擎层：Spark / Trino / Doris 通过 Ranger 插件做库表行级列级鉴权</div>
+      <div class="arch-layer">存储层：HDFS 或对象存储 ACL/IAM 保证绕过引擎也读不到文件</div>
+      <ul>
+        <li>只配引擎层：用户绕开 Trino，直接拿 OSS/S3 上的 parquet 文件用本地 Spark 读——泄露。因此对象存储侧要用角色（RAM Role / IAM）把数据路径限制给引擎服务账号；</li>
+        <li>只配存储层：用户能登录 Trino 但看不到表级控制与脱敏——合规过不了审计。两层合围，才构成完整边界。</li>
+      </ul>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：生产环境严禁"个人账号直连 + sudo 式共享凭证"。所有作业统一用服务账号（如 <code>etl_bot</code>）跑，人只通过 Trino/Hive 入口查询；Ranger 开启 audit 审计落盘，审计日志保留 180 天以上，等保与 SOC2 审计都会查。
+      </div>
+
+      <h2 id="hot-cold">冷热数据策略</h2>
+      <p>湖仓数据的价值密度随时间衰减：订单表最近 7 天可能每天被点查上百次，而 180 天前的数据只在月末跑一次报表。把所有数据都放在高规格介质上，是成本的最大浪费。冷热分层的依据只有两个：<strong>查询频率</strong>与<strong>业务价值</strong>（合规要求长期保留的数据是例外，可直落冷层）。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>介质</th>
+            <th>典型延迟</th>
+            <th>单价（相对）</th>
+            <th>放置内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">热</span></td>
+            <td>本地 SSD / NVMe</td>
+            <td>毫秒级</td>
+            <td>10×</td>
+            <td>近 7 天分区、点查高频表、维表</td>
+          </tr>
+          <tr>
+            <td><span class="pill">温</span></td>
+            <td>HDD DataNode / 标准云盘</td>
+            <td>秒级</td>
+            <td>3×</td>
+            <td>90 天内常规分区、例行报表数据</td>
+          </tr>
+          <tr>
+            <td><span class="pill">冷</span></td>
+            <td>对象存储归档（OSS Archive / S3 Glacier）</td>
+            <td>分钟级（取回需解冻）</td>
+            <td>0.5×</td>
+            <td>180 天外历史分区、合规留存</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Iceberg 分区级 TTL 与迁移</h3>
+      <p>Iceberg 的优势在于分区是元数据概念，<strong>迁移冷数据不需要重写全表</strong>：旧分区文件迁到廉价介质后，用 <code>ALTER TABLE ... SET LOCATION</code> 或对象存储生命周期规则整体切换即可，元数据指针不变，查询 SQL 不用改。</p>
+
+      <pre><code>-- ========== 步骤 1：把 90 天前的分区数据拷贝到归档桶 ==========
+<span class="comment">-- hadoop distcp 归档路径保持分区目录结构不变</span>
+hadoop distcp -update \
+  oss://lake-warehouse/lake/dwd_trade_order_di/data/dt=2025-01-15 \
+  oss://lake-archive/lake/dwd_trade_order_di/data/dt=2025-01-15
+
+-- ========== 步骤 2：整表切换存储位置（元数据指针级操作，秒级完成）==========
+ALTER TABLE lake.dwd_trade_order_di
+SET LOCATION 'oss://lake-archive/lake/dwd_trade_order_di';
+<span class="comment">-- 也可只对新写入生效：写入走热桶、历史走冷桶由存储层挂载视图统一呈现</span>
+
+-- ========== 步骤 3：配合分区规格演进，历史分区转月分区 ==========
+ALTER TABLE lake.dwd_trade_order_di
+SET PARTITION SPEC (months(dt));   <span class="comment">-- 仅影响后续写入，存量分区保持不变</span>
+<span class="comment">-- 优点：新数据月分区降低小分区基数；旧数据不动，避免全表重写</span></code></pre>
+
+      <pre><code class="language-yaml"><span class="comment"># 示例迁移任务：每晚扫描分区元数据，把 90 天外分区标记降冷（DolphinScheduler）</span>
+name: partition_cooldown_job
+cron: "0 30 2 * * ?"                 <span class="comment"># 凌晨 2:30 低峰执行</span>
+tasks:
+  - name: scan_and_archive
+    type: SHELL
+    script: |
+      <span class="comment"># 统计每个分区最近 30 天的查询次数（来自查询审计表）</span>
+      spark-sql -e "
+        INSERT OVERWRITE meta.partition_hot_map
+        SELECT table_name, partition_value,
+               count(*) AS q_cnt_30d
+        FROM audit.query_log
+        WHERE event_time &gt;= date_sub(current_date(), 30)
+        GROUP BY table_name, partition_value"
+      <span class="comment"># 30 天内 0 次查询且超过 90 天的分区，进入降冷队列（人工确认后执行迁移）</span>
+      spark-sql -e "
+        SELECT * FROM meta.partition_hot_map
+        WHERE q_cnt_30d = 0"</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：降冷决策由"查询频率"驱动而非拍脑袋。用 Trino 的查询审计日志（<code>system.runtime.queries</code> 定期落表）统计分区级访问热度，形成 <code>table × partition × 30 天查询数</code> 热度矩阵：连续 30 天 0 命中的温层分区自动进入降冷候选，owner 每周确认一次批量执行，既省成本又避免误降冷引发取回解冻的分钟级延迟。
+      </div>
+
+      <h2 id="lifecycle">数据生命周期</h2>
+      <p>生命周期管理回答"数据活多久、怎么退场"。没有明确保留期的数据会无限膨胀——存储账单线性上涨、Iceberg 元数据越来越重、快照清理越来越慢。保留期的定义必须写进元数据、随表登记一起审批，而不是靠某个工程师的记忆。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>在线保留期</th>
+            <th>归档保留期</th>
+            <th>到期处置</th>
+            <th>依据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">ODS</span></td>
+            <td>90 天</td>
+            <td>180 天（可从源重刷）</td>
+            <td>到期删除，必要时由上游重放</td>
+            <td>原始数据可从业务库/CDC 日志重建</td>
+          </tr>
+          <tr>
+            <td><span class="pill">DWD</span></td>
+            <td>1 年</td>
+            <td>3 年</td>
+            <td>到期归档至冷桶</td>
+            <td>明细回溯需求（对账/排查）集中在 1 年内</td>
+          </tr>
+          <tr>
+            <td><span class="pill">DWS</span></td>
+            <td>长期（3 年+）</td>
+            <td>与在线同</td>
+            <td>按主题定期评审</td>
+            <td>聚合数据体量小、查询频度高</td>
+          </tr>
+          <tr>
+            <td><span class="pill">ADS</span></td>
+            <td>随应用（通常 1 年）</td>
+            <td>随应用</td>
+            <td>应用下线即下线</td>
+            <td>生命周期绑定消费方</td>
+          </tr>
+          <tr>
+            <td><span class="pill">日志/行为</span></td>
+            <td>30–60 天</td>
+            <td>合规要求年限（如 6 个月）</td>
+            <td>到期硬删除并出具凭证</td>
+            <td>等保/个保法要求</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>归档与销毁流程</h3>
+      <p>退场比入场更需要流程，因为删除是不可逆操作。标准四步：<strong>标记 → 双人复核 → 执行 → 留痕</strong>。</p>
+      <ol>
+        <li><strong>标记</strong>：到期扫描任务（每晚 03:00）列出超期分区，写入 <code>meta.expire_queue</code>，冻结 7 天等待确认；</li>
+        <li><strong>双人复核</strong>：owner 确认业务上确实无人使用（查 90 天访问审计），DBA 复核血缘下游无依赖表仍在读取该分区；</li>
+        <li><strong>执行</strong>：归档（distcp 到冷桶）→ 在线表 <code>DELETE FROM ... WHERE dt &lt; 期限</code> → 触发快照过期，物理文件被清理；</li>
+        <li><strong>留痕</strong>：销毁凭证记录表名、分区、行数、执行人、审批单号，审计可回溯"谁在什么时候删了什么"。</li>
+      </ol>
+
+      <pre><code>-- 到期清理示例：删除 90 天前 ODS 分区并立即做过期，物理释放空间
+DELETE FROM lake.ods_trade_mysql_ord
+WHERE dt &lt; date_sub(current_date(), 90);
+
+<span class="comment">-- DELETE 只是元数据层打删除标记，旧文件仍被历史快照引用，</span>
+<span class="comment">-- 必须配合 expire_snapshots 才真正释放对象存储空间：</span>
+CALL lake.system.expire_snapshots(
+  table =&gt; 'lake.ods_trade_mysql_ord',
+  older_than =&gt; timestamp '2026-08-01 00:00:00',
+  max_concurrent_deletes =&gt; 4
+);</code></pre>
+
+      <h3>元数据先行原则</h3>
+      <p>生命周期的所有自动化（到期扫描、降冷队列、销毁审批）都依赖元数据中的保留期字段。<strong>没有登记保留期的表不允许建</strong>——这是"元数据先行"的第一层含义。第二层含义是：归档前必须先归档元数据（schema、快照指针、统计信息），冷桶里躺着"能被读懂"的数据，而不是一堆裸 parquet。第三层含义是：任何生命周期动作先改元数据再动物理文件，失败可重试，不会出现"文件删了登记没删"的脏状态。</p>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：合规类数据（涉个人信息）到期必须物理删除而非仅"下线表"，个保法要求删除权可被验证。同时评估保留义务下限——金融交易数据监管常要求保留 5 年以上，保留期设置过短同样违法。
+      </div>
+
+      <h2 id="disaster-recovery">灾备恢复机制</h2>
+      <p>湖仓的故障场景有两大类：<strong>逻辑错误</strong>（误删表、误 UPDATE、脏数据覆盖——最常见，占 80%+）与<strong>物理故障</strong>（机房级/区域级灾难）。前者靠 Iceberg 时间旅行分钟级自救，后者靠备份跨集群重建。两类场景对应的恢复手段与目标完全不同，不能混为一谈。</p>
+
+      <h3>Iceberg 时间旅行：逻辑错误的自救</h3>
+      <pre><code>-- ========== 场景 1：误 UPDATE 全表（把所有金额改错了），回滚到错误前快照 ==========
+<span class="comment">-- 1) 查快照历史，找到事故前最后一个正常快照</span>
+SELECT snapshot_id, committed_at, operation, summary
+FROM lake.dwd_trade_order_di.snapshots
+ORDER BY committed_at DESC LIMIT 10;
+
+<span class="comment">-- 2) 先用时间旅行核对旧快照数据是否正确（读时指定快照，不影响当前表）</span>
+SELECT count(*), sum(order_amount)
+FROM lake.dwd_trade_order_di
+FOR VERSION AS OF 4718321076102389337;      <span class="comment">-- 替换为上一步查到的 snapshot_id</span>
+
+<span class="comment">-- 3) 确认无误后执行回滚（Spark 3.4+ / Iceberg 1.4+，代价是新增一个回滚快照）</span>
+CALL lake.system.rollback_to_snapshot(
+  table =&gt; 'lake.dwd_trade_order_di',
+  snapshot_id =&gt; 4718321076102389337
+);
+
+-- ========== 场景 2：表被误 DROP，从删除的元数据恢复 ==========
+<span class="comment">-- 表 drop 后如果做过 commit history 保留，可按历史元数据指针恢复：</span>
+CALL lake.system.register_table(
+  table =&gt; 'lake.dwd_trade_order_di_restored',
+  metadata_file =&gt; 'oss://lake-warehouse/lake/dwd_trade_order_di/metadata/00012.metadata.json'
+);
+<span class="comment">-- register_table 把仍存在的 metadata json 重新注册成新表，数据文件完好即可读</span>
+<span class="comment">-- 前提：对象存储开了版本控制或元数据文件未被物理清理（见下文）</span></code></pre>
+
+      <h3>快照清理与恢复窗口的平衡</h3>
+      <p>时间旅行的能力边界 = 快照保留窗口。快照留得越久可回滚越远，但过期快照不清理则对象存储文件持续膨胀。核心属性是写入时的表属性 <code>write.metadata.delete-after-commit.enabled</code> 与过期参数的搭配：</p>
+
+      <pre><code>-- 建表时设定快照保留基线（表属性）
+ALTER TABLE lake.dwd_trade_order_di
+SET TBLPROPERTIES (
+  'write.metadata.delete-after-commit.enabled' = 'true',  <span class="comment">-- 提交后清理旧 metadata.json</span>
+  'write.metadata.previous-versions-max'     = '20',
+  'history.expire.max-snapshot-age-ms'      = '604800000',  <span class="comment">-- 最长保留 7 天</span>
+  'history.expire.min-snapshots-to-keep'    = '20'           <span class="comment">-- 每分支至少保留 20 个快照</span>
+);
+
+<span class="comment">-- min-snapshots-to-keep 与 max-snapshot-age 是"或"的关系：</span>
+<span class="comment">-- 快照同时满足"早于 7 天"且"数量超过 20 个保留底线"才可被 expire 清理，</span>
+<span class="comment">-- 两个参数共同决定恢复窗口：高频提交表（流式分钟级）按数量兜底，</span>
+<span class="comment">-- 低频提交表（日批）按时间兜底，保证至少能回到上一个正确的日批版本。</span>
+CALL lake.system.expire_snapshots(
+  table =&gt; 'lake.dwd_trade_order_di',
+  older_than =&gt; timestamp '2026-10-29 00:00:00'
+);</code></pre>
+
+      <h3>对象存储版本控制与跨集群备份</h3>
+      <ul>
+        <li><strong>S3/OSS 版本控制（versioning）</strong>：桶级开关，物理删除时打删除标记而非真删，误删的 metadata.json 与数据文件可按版本恢复。代价是删除不释放空间，需要生命周期规则定期清理旧版本（如非当前版本 30 天后删除）；</li>
+        <li><strong>跨集群/跨区备份</strong>：数据文件用 <code>hadoop distcp</code> 或对象存储跨区复制定时同步；元数据侧周期性导出当前 metadata 文件清单（Iceberg 快照的 manifest 清单）到备份库，确保"文件 + 指针"都可重建；</li>
+        <li><strong>演练制度</strong>：每季度做一次恢复演练（抽 5 张核心表），验证备份真的可用——没演练过的备份等于没有备份。</li>
+      </ul>
+
+      <pre><code class="language-bash"><span class="comment"># 每周日 01:00 跨集群备份核心库（数据 + 元数据一起搬）</span>
+hadoop distcp -update -delete \
+  oss://lake-warehouse/lake/dwd_trade_order_di \
+  oss://lake-backup-us-west/lake/dwd_trade_order_di
+
+<span class="comment"># 元数据清单导出：记录每张表当前 metadata 文件位置，恢复时的"指针档案"</span>
+spark-sql -e "SELECT * FROM lake.dwd_trade_order_di.all_metadata_files" \
+  &gt; backup/metadata_dwd_trade_order_di_$(date +%F).txt
+
+<span class="comment"># 对象存储版本控制（AWS CLI）：桶级开启，防物理误删</span>
+aws s3api put-bucket-versioning --bucket lake-warehouse \
+  --versioning-configuration Status=Enabled</code></pre>
+
+      <h3>RTO / RPO 目标设定</h3>
+      <p>灾备不是"越强越好"，而是按业务分级投入。先给资产定级，再定恢复目标，最后选择成本匹配的手段：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>资产等级</th>
+            <th>典型数据</th>
+            <th>RPO（可容忍丢失）</th>
+            <th>RTO（可容忍恢复）</th>
+            <th>恢复手段</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill">L1 核心</span></td>
+            <td>交易 DWD、账户维表</td>
+            <td>≤ 5 分钟</td>
+            <td>≤ 30 分钟</td>
+            <td>时间旅行 + 跨区实时复制</td>
+          </tr>
+          <tr>
+            <td><span class="pill">L2 重要</span></td>
+            <td>DWS 汇总、报表 ADS</td>
+            <td>≤ 24 小时</td>
+            <td>≤ 4 小时</td>
+            <td>日备 + 上游重算兜底</td>
+          </tr>
+          <tr>
+            <td><span class="pill">L3 一般</span></td>
+            <td>行为日志、实验数据</td>
+            <td>≤ 24 小时</td>
+            <td>≤ 24 小时</td>
+            <td>源系统重放（Kafka 回溯）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>提示</strong>：L1 表的 RPO 之所以能压到 5 分钟，是因为流式入湖链路本身带 checkpoint 与 Kafka 重放能力——"可重算"是比"可备份"更优雅的灾备。设计时优先评估"这段数据能否从上游重放"，能重放的表用轻量备份，只给不可重建的数据上重备份。
+      </div>
+
+      <h2 id="metrics">治理度量</h2>
+      <p>治理本身也需要被度量，否则无法回答"这半年治理投入值不值"。三个北极星指标：<strong>资产覆盖率</strong>（元数据完整性）、<strong>质量分</strong>（数据可信度）、<strong>权限审计率</strong>（安全合规水位）。所有指标由定时任务自动计算并出周报/月报。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>指标</th>
+            <th>定义</th>
+            <th>计算口径（示例 SQL 语义）</th>
+            <th>健康线</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>资产覆盖率</td>
+            <td>已完成登记与分级的表 / 全部表</td>
+            <td><code>登记表数 / show tables 总数</code>，按域分组展示</td>
+            <td>≥ 95%</td>
+          </tr>
+          <tr>
+            <td>平均质量分</td>
+            <td>强/弱规则加权得分</td>
+            <td><code>sum(100 - 扣分) / 表数</code>，按周趋势</td>
+            <td>≥ 90 分</td>
+          </tr>
+          <tr>
+            <td>权限审计率</td>
+            <td>有 Ranger 策略覆盖的表 / 全部表</td>
+            <td><code>有策略表数 / 总表数</code>，含行级/列级覆盖统计</td>
+            <td>100%（无策略即裸奔）</td>
+          </tr>
+          <tr>
+            <td>僵尸数据占比</td>
+            <td>90 天零访问的存储量占比</td>
+            <td><code>冷数据字节 / 总字节</code>（来自热度矩阵）</td>
+            <td>≤ 30%</td>
+          </tr>
+          <tr>
+            <td>恢复演练通过率</td>
+            <td>季度演练成功表数 / 抽样表数</td>
+            <td>演练记录表统计</td>
+            <td>100%</td>
+          </tr>
+          <tr>
+            <td>告警有效率</td>
+            <td>触发处置动作的告警 / 全部告警</td>
+            <td>DQC 结果表与告警工单关联统计</td>
+            <td>≥ 60%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：治理度量看板与存储账单并排展示——把"僵尸数据占比下降 10% = 每月省 X 元"翻译成管理层能读懂的语言，是治理团队争取长期投入的最有效方式。指标月度评审，连续两月不达标的项目立项专项整改。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+
+

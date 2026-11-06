@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>计算引擎层 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧目录 + 右侧正文 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#positioning">本层定位</a>
+      <a href="#spark">Apache Spark</a>
+      <a href="#flink">Apache Flink</a>
+      <a href="#unify">批流一体设计</a>
+      <a href="#tuning">计算层调优要点</a>
+      <a href="#boundary">适用边界</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">计算引擎层</h1>
+      <div class="page-intro">
+        本页讲解湖仓一体的双引擎计算层：Spark 承担大规模批处理与机器学习，Flink 承担低延迟流处理，
+        二者通过共享 Iceberg 表格式实现“流写批读”的批流一体。内容覆盖两大引擎的架构原理、与 Iceberg 的集成方式、
+        Exactly-Once 语义的实现机制，以及资源模型、数据倾斜、Checkpoint 等生产级调优经验。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="positioning">本层定位</h2>
+      <p>湖仓的计算层只回答一个问题：<strong>谁来算、以什么节奏算</strong>。因为存储层已经解耦（见
+        <a href="storage.html">存储与表格式层</a>），计算引擎可以按负载自由选择与替换——这正是“存算分离”红利的兑现处。
+        业界事实标准是“Spark + Flink”双引擎分工：</p>
+      <ul>
+        <li><span class="pill">Spark</span> 面向<strong>大规模离线批处理</strong>：T+1 数仓回刷、全量重算、机器学习训练、图计算；
+          吞吐之王，作业即起即走。</li>
+        <li><span class="pill">Flink</span> 面向<strong>持续低延迟流处理</strong>：CDC 实时入湖、实时打宽、CEP 复杂事件、
+          秒级大屏指标；状态管理是一等公民，作业常驻运行。</li>
+      </ul>
+
+      <div class="arch-layer">数据源层：MySQL CDC / Kafka / 日志采集（持续产生变更）</div>
+      <div class="arch-layer">流计算：Flink 低延迟清洗打宽，upsert 写入 Iceberg（秒~分钟级可见）</div>
+      <div class="arch-layer">批计算：Spark 大规模回刷、补数重算、ML 训练读写同一批表（小时级节奏）</div>
+      <div class="arch-layer">共享存储：Iceberg 表（统一快照协议，读写互不干扰）</div>
+      <div class="arch-layer">消费层：Trino 交互查询 / Doris 指标服务 / BI 报表 / Notebook</div>
+
+      <p>“批流一体”的核心不在引擎本身，而在<strong>共享的表</strong>：Flink 把变更流以主键 upsert 方式持续写入 Iceberg，
+        Spark 与 Trino 按 snapshot 读取同一张表的稳定视图——流与批读的永远是一份物理数据，不再需要“实时表 + 离线表”两套口径。</p>
+
+      <div class="diagram">
+        <svg width="620" height="340" viewBox="0 0 620 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="批流一体共享 Iceberg 存储示意图">
+          <rect x="10" y="10" width="600" height="44" rx="8" fill="#155e75"></rect>
+          <text x="310" y="37" text-anchor="middle" fill="#ffffff" font-size="14">数据源：MySQL CDC / Kafka / 日志（变更流持续到达）</text>
+          <line x1="170" y1="54" x2="170" y2="90" stroke="#475569" stroke-width="2"></line>
+          <polygon points="170,96 164,86 176,86" fill="#475569"></polygon>
+          <line x1="450" y1="54" x2="450" y2="90" stroke="#475569" stroke-width="2"></line>
+          <polygon points="450,96 444,86 456,86" fill="#475569"></polygon>
+          <rect x="10" y="98" width="320" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="170" y="125" text-anchor="middle" fill="#ffffff" font-size="14">Flink 流链路：实时打宽，秒~分钟级写入</text>
+          <rect x="340" y="98" width="270" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="475" y="125" text-anchor="middle" fill="#ffffff" font-size="14">Spark 批链路：回刷/补数/训练</text>
+          <line x1="170" y1="142" x2="170" y2="178" stroke="#475569" stroke-width="2"></line>
+          <polygon points="170,184 164,174 176,174" fill="#475569"></polygon>
+          <line x1="475" y1="142" x2="475" y2="178" stroke="#475569" stroke-width="2"></line>
+          <polygon points="475,184 469,174 481,174" fill="#475569"></polygon>
+          <rect x="10" y="186" width="600" height="44" rx="8" fill="#0d9488"></rect>
+          <text x="310" y="213" text-anchor="middle" fill="#ffffff" font-size="14">同一张 Iceberg 表：快照隔离，流写与批读互不阻塞</text>
+          <line x1="310" y1="230" x2="310" y2="262" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,268 304,258 316,258" fill="#475569"></polygon>
+          <rect x="10" y="270" width="600" height="44" rx="8" fill="#5eead4"></rect>
+          <text x="310" y="297" text-anchor="middle" fill="#134e4a" font-size="14">消费：Trino 交互查询 / Doris 指标 / BI 报表 / Notebook 分析</text>
+        </svg>
+      </div>
+
+      <div class="callout">
+        <strong>为什么不“一个引擎打天下”</strong>：Spark Structured Streaming 本质是微批，最小延迟通常在百毫秒到秒级且大状态管理偏弱；
+          Flink 擅长流但生态位不在超大规模批回刷与 ML。湖仓用<strong>共享表格式</strong>替代了“共享引擎”的幻想——
+          让每个引擎只做自己最擅长的事，数据口径却天然一致。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="spark">Apache Spark</h2>
+
+      <h3>架构总览</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h3>Driver</h3>
+          <p>运行 main()：构建 DAG、拆分 Stage、生成 TaskSet 并调度给 Executor；SparkContext /
+            SparkSession 的宿主。Driver 内存不足或 GC 抖动会直接拖慢全作业。</p>
+        </div>
+        <div class="card">
+          <h3>Executor</h3>
+          <p>常驻 JVM 进程池：执行 Task、缓存 RDD/DataFrame、读写外部存储。堆内（执行+存储）与堆外
+            （memoryOverhead）两块内存空间需分别规划。</p>
+        </div>
+        <div class="card">
+          <h3>Catalyst</h3>
+          <p>查询优化器：解析 SQL → 未解析/分析/优化逻辑计划 → 物理计划。谓词下推、列裁剪、
+            join 策略选择都在这里发生；Iceberg 通过扩展点把分区裁剪与文件级跳过注入此层。</p>
+        </div>
+        <div class="card">
+          <h3>Tungsten</h3>
+          <p>执行引擎：堆内二进制格式（sun.misc.Unsafe）、全阶段代码生成（WSCG）、缓存感知算子，
+            把 CPU 效率压榨到接近手写代码。</p>
+        </div>
+      </div>
+
+      <h3>与 Iceberg 集成</h3>
+      <p>Spark 是 Iceberg 生态最完整的引擎：SQL 扩展（MERGE INTO / 时间旅行 / 存储过程）开箱即用。
+        集成三要素：<strong>runtime 包、catalog 定义、SQL 扩展</strong>。</p>
+
+      <pre><code># spark-defaults.conf：Iceberg on Spark 三要素
+spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog
+spark.sql.catalog.lakehouse.type=hive
+spark.sql.catalog.lakehouse.uri=thrift://hms.lakehouse.local:9083
+spark.sql.catalog.lakehouse.warehouse=s3a://lakehouse/warehouse</code></pre>
+
+      <p>建表、MERGE INTO 与时间旅行的完整 SQL 见<a href="storage.html#iceberg">存储层 · Apache Iceberg</a>一节。
+        引擎侧最常用的维护能力是<strong>存储过程（Stored Procedures）</strong>，compaction 是其中最核心的一个：</p>
+
+      <pre><code>-- binpack（默认）：把小文件打包合并到 target 大小，代价最小
+CALL lakehouse.system.rewrite_data_files(
+  table    =&gt; 'lakehouse.dws_orders',
+  strategy =&gt; 'binpack',
+  where    =&gt; 'dt = DATE '\''2026-11-04'\'''     <span class="comment">-- 只处理当天分区，避免全表重写</span>
+);
+
+-- sort：合并的同时按排序列重写，提高文件级裁剪命中率
+CALL lakehouse.system.rewrite_data_files(
+  table      =&gt; 'lakehouse.dws_orders',
+  strategy   =&gt; 'sort',
+  sort_order =&gt; 'city ASC NULLS FIRST, order_ts DESC'
+);
+
+-- zorder：多维聚簇，适合多个“等权重”查询列的组合过滤
+CALL lakehouse.system.rewrite_data_files(
+  table      =&gt; 'lakehouse.dws_orders',
+  strategy   =&gt; 'zorder',
+  sort_order =&gt; 'zorder(city, user_id, order_ts)'
+);
+
+-- 配套维护：manifest 合并与快照过期（与存储层治理章节同一套动作）
+CALL lakehouse.system.rewrite_manifests(table =&gt; 'lakehouse.dws_orders');
+CALL lakehouse.system.expire_snapshots(
+  table =&gt; 'lakehouse.dws_orders',
+  older_than =&gt; TIMESTAMP '2026-10-28 00:00:00',
+  retain_last =&gt; 100
+);</code></pre>
+
+      <h3>spark-submit 提交模板</h3>
+      <pre><code>spark-submit --master yarn --deploy-mode cluster \
+  --name dws_orders_merge_$(date +%F) \
+  --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2 \
+  --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+  --conf spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.lakehouse.type=hive \
+  --conf spark.sql.catalog.lakehouse.uri=thrift://hms.lakehouse.local:9083 \
+  --conf spark.sql.catalog.lakehouse.warehouse=s3a://lakehouse/warehouse \
+  --conf spark.hadoop.fs.s3a.endpoint=http://minio.lakehouse.local:9000 \
+  --conf spark.hadoop.fs.s3a.path.style.access=true \
+  --conf spark.hadoop.fs.s3a.committer.name=magic \
+  --conf spark.sql.adaptive.enabled=true \
+  --conf spark.sql.shuffle.partitions=800 \
+  --num-executors 20 \
+  --executor-cores 4 \
+  --executor-memory 16g \
+  --conf spark.memory.fraction=0.80 \
+  --conf spark.executor.memoryOverhead=4g \
+  --class com.lakehouse.etl.DwsOrdersJob \
+  /opt/jobs/lakehouse-etl-1.0.0.jar --date 2026-11-04</code></pre>
+
+      <h3>核心调优参数表</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>参数</th>
+            <th>建议起点</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>--executor-cores</code></td>
+            <td>4–5</td>
+            <td>单 Executor 任务并发；过大易争抢 HDFS/对象存储客户端与 CPU 缓存</td>
+          </tr>
+          <tr>
+            <td><code>--executor-memory</code></td>
+            <td>16g（每核 4–8GB）</td>
+            <td>与 cores 匹配；宽 shuffle / 缓存重时加大</td>
+          </tr>
+          <tr>
+            <td><code>spark.memory.fraction</code></td>
+            <td>0.80</td>
+            <td>执行+存储占（堆 − 300MB）比例，重缓存作业可回调</td>
+          </tr>
+          <tr>
+            <td><code>spark.executor.memoryOverhead</code></td>
+            <td>3–4g（约 15%–25%）</td>
+            <td>堆外：Iceberg/Arrow 缓冲、网络、压缩；OOM in no Java heap 先看它</td>
+          </tr>
+          <tr>
+            <td><code>spark.sql.shuffle.partitions</code></td>
+            <td>总核数的 2–3 倍</td>
+            <td>开启 AQE 后可放心给大值，由 AQE 自动合并</td>
+          </tr>
+          <tr>
+            <td><code>spark.sql.adaptive.enabled</code></td>
+            <td>true</td>
+            <td>AQE 总开关：分区合并、倾斜 join、运行时 join 策略转换</td>
+          </tr>
+          <tr>
+            <td><code>spark.sql.adaptive.advisoryPartitionSizeInBytes</code></td>
+            <td>128MB</td>
+            <td>AQE 合并后的目标分区大小，与存储文件大小规划对齐</td>
+          </tr>
+          <tr>
+            <td><code>spark.sql.autoBroadcastJoinThreshold</code></td>
+            <td>64MB</td>
+            <td>小表广播阈值；维表经常超限时改为显式 <code>/*+ BROADCAST */</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>AQE：开启即得的性价比之王</h3>
+      <pre><code># 自适应查询执行（Spark 3+）：基于运行时统计自动纠偏
+spark.sql.adaptive.enabled=true
+spark.sql.adaptive.coalescePartitions.enabled=true
+spark.sql.adaptive.coalescePartitions.initialPartitionNum=1600   <span class="comment"># 起始分区给大，让 AQE 往回合</span>
+spark.sql.adaptive.advisoryPartitionSizeInBytes=134217728        <span class="comment"># 合并目标 128MB</span>
+spark.sql.adaptive.skewJoin.enabled=true                         <span class="comment"># 倾斜 join 自动拆分热点分区</span>
+spark.sql.adaptive.skewJoin.skewedPartitionFactor=5
+spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes=268435456
+spark.sql.adaptive.localShuffleReader.enabled=true              <span class="comment"># 避免 shuffle 的本地读</span></code></pre>
+
+      <h3>数据倾斜处理</h3>
+      <p>症状：个别 Task 执行几十分钟而其余早已完成（Spark UI 可见 Stage 内 Task 耗时呈长尾）。三套打法按序尝试：</p>
+      <pre><code>-- ============================================================
+-- 场景：dwd_orders（大表）JOIN dim_user（维表，热点 key 倾斜）
+-- ============================================================
+
+-- 方案 A：小表可放内存 → 直接广播，join 退化为 map 端操作（首选）
+SELECT /*+ BROADCAST(u) */ o.order_id, o.user_id, u.city
+FROM lakehouse.dwd_orders o
+JOIN lakehouse.dim_user u ON o.user_id = u.user_id
+WHERE o.dt = '2026-11-04';
+
+-- 方案 B：salting 加盐 —— 把倾斜 key 打散成 N 个桶分摊计算
+WITH big_salted AS (
+  SELECT o.*, pmod(hash(o.user_id), 64) AS salt     <span class="comment">-- 大表：key 加盐到 64 桶</span>
+  FROM lakehouse.dwd_orders o
+  WHERE o.dt = '2026-11-04'
+), small_replicated AS (
+  SELECT u.*, s.salt                              <span class="comment">-- 维表：按同样规则复制 64 份</span>
+  FROM lakehouse.dim_user u
+  LATERAL VIEW explode(sequence(0, 63)) s AS salt
+)
+SELECT b.order_id, b.user_id, b.order_amount
+FROM big_salted b
+JOIN small_replicated r ON b.user_id = r.user_id AND b.salt = r.salt;
+
+-- 方案 C：两阶段聚合 —— 先局部聚合压缩数据量，再全局聚合
+SELECT city, SUM(pv) AS pv, SUM(gmv) AS gmv
+FROM (
+  SELECT user_id, city,
+         count(*)     AS pv,          <span class="comment">-- map 端局部聚合：热点 key 先被压缩</span>
+         sum(amount)  AS gmv
+  FROM lakehouse.dwd_orders
+  WHERE dt = '2026-11-04'
+  GROUP BY user_id, city
+)
+GROUP BY city;</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：先开 <code>spark.sql.adaptive.skewJoin</code> 让引擎自动拆热点；仍倾斜再按
+          “A 广播 → B 加盐 → C 两阶段聚合”的顺序手工干预。加盐桶数取倾斜 key 前几名数据量的 2–4 倍幂，
+          且只对发生倾斜的日期/分区局部启用，避免拖累正常任务。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="flink">Apache Flink</h2>
+
+      <h3>架构总览</h3>
+      <ul>
+        <li><strong>JobManager</strong>：作业主控。JobMaster 负责调度与 CheckpointCoordinator 协调快照；
+          ResourceManager 管理 TaskManager/Slot 资源；Dispatcher 接收提交、拉起 JobManager。</li>
+        <li><strong>TaskManager（TM）</strong>：工作进程，内部划分若干 <strong>slot</strong>（资源切片，同作业算子可共享）；
+          每个 Task 消费中间结果分区，承接网络传输与状态访问。</li>
+        <li><strong>Checkpoint</strong>：基于 Chandy-Lamport 分布式快照——<code>Barrier</code> 随数据流入算子，
+          对齐后把各算子状态异步持久化到远端（对象存储/HDFS），失败时全体回滚到最近一致点。</li>
+      </ul>
+
+      <h3>流表一体的核心：Checkpoint + 两阶段提交写 Iceberg</h3>
+      <p>Flink 的 Checkpoint 只保证<strong>引擎内部</strong>状态一致；要把一致性延伸到 Iceberg 表，
+        靠的是 sink 的两阶段提交（2PC）协议：</p>
+
+      <div class="diagram">
+        <svg width="620" height="410" viewBox="0 0 620 410" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Flink 写 Iceberg 两阶段提交流程">
+          <rect x="10" y="8" width="600" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="310" y="35" text-anchor="middle" fill="#ffffff" font-size="14">① Barrier 随数据流注入所有算子，触发 Checkpoint</text>
+          <line x1="310" y1="52" x2="310" y2="82" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,88 304,78 316,78" fill="#475569"></polygon>
+          <rect x="10" y="90" width="600" height="44" rx="8" fill="#0d9488"></rect>
+          <text x="310" y="117" text-anchor="middle" fill="#ffffff" font-size="14">② Writer 预提交：数据文件写入对象存储（用唯一 ID 命名，暂不登记）</text>
+          <line x1="310" y1="134" x2="310" y2="164" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,170 304,160 316,160" fill="#475569"></polygon>
+          <rect x="10" y="172" width="600" height="44" rx="8" fill="#0d9488"></rect>
+          <text x="310" y="199" text-anchor="middle" fill="#ffffff" font-size="14">③ 待提交记录（文件清单）随状态一起持久化到 Checkpoint</text>
+          <line x1="310" y1="216" x2="310" y2="246" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,252 304,242 316,242" fill="#475569"></polygon>
+          <rect x="10" y="254" width="600" height="44" rx="8" fill="#14b8a6"></rect>
+          <text x="310" y="281" text-anchor="middle" fill="#ffffff" font-size="14">④ 全部算子成功 → Committer 写新 manifest / snapshot / metadata.json，原子切换指针</text>
+          <line x1="310" y1="298" x2="310" y2="328" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,334 304,324 316,324" fill="#475569"></polygon>
+          <rect x="10" y="336" width="600" height="44" rx="8" fill="#5eead4"></rect>
+          <text x="310" y="363" text-anchor="middle" fill="#134e4a" font-size="14">⑤ 读取方立即可见新快照（可见性延迟 = Checkpoint 间隔）</text>
+          <text x="310" y="400" text-anchor="middle" fill="#475569" font-size="12">失败场景：② ③ ④ 任一步失败即放弃本次提交，残留文件由 remove_orphan_files 回收</text>
+        </svg>
+      </div>
+
+      <ol>
+        <li><strong>预提交（prepareCommit）</strong>：Writer 把本间隔数据写成 Parquet 数据文件与删除文件，登记为 pending；</li>
+        <li><strong>状态持久化</strong>：pending 清单进入 Checkpoint 状态后端——这一步成功，提交才“有据可查”；</li>
+        <li><strong>正式提交（commit）</strong>：收到 Checkpoint 完成通知后，Committer 生成新 snapshot 并原子切换
+          metadata.json 指针；这与 Iceberg 的提交协议（见存储层）完全同构；</li>
+        <li><strong>故障恢复</strong>：从 Checkpoint 重启后，既不会丢已确认数据（Exactly-Once），也不会提交半成品（孤儿文件另由维护作业清理）。</li>
+      </ol>
+
+      <h3>Watermark 与事件时间</h3>
+      <p>乱序数据流上，“现在几点”由 Watermark 声明：<code>watermark = max(event_ts) − 允许迟到</code>。
+        窗口只有在 watermark 越过其<strong>结束边界</strong>后才触发计算——这是事件时间语义下结果正确性的基石：</p>
+      <pre><code>-- Kafka 源表：事件时间戳 + 5 秒乱序容忍
+CREATE TABLE kafka_orders (
+  order_id   STRING,
+  order_ts   TIMESTAMP(3),
+  amount     DECIMAL(12, 2),
+  WATERMARK FOR order_ts AS order_ts - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'properties.bootstrap.servers' = 'kafka1:9092,kafka2:9092',
+  'properties.group.id' = 'dws_gmv_job',
+  'scan.startup.mode' = 'latest-offset',
+  'format' = 'json'
+);
+
+-- 事件时间滚动窗口：窗口闭合才产出，迟到 5 秒内数据完整计入
+SELECT
+  DATE_FORMAT(window_start, 'yyyy-MM-dd HH:mm') AS win_start,
+  count(*)    AS order_cnt,
+  sum(amount) AS gmv
+FROM TABLE(
+  TUMBLE(TABLE kafka_orders, DESCRIPTOR(order_ts), INTERVAL '1' MINUTE)
+)
+GROUP BY window_start, window_end;</code></pre>
+
+      <h3>实战：Flink SQL CDC → Iceberg 完整作业</h3>
+      <pre><code>-- ============================================================
+-- MySQL CDC 实时入湖：全量快照 + 增量 binlog，一作业搞定
+-- ============================================================
+
+-- 0) 作业级配置（SQL 客户端）
+SET 'execution.checkpointing.interval' = '2min';
+SET 'execution.checkpointing.mode'     = 'EXACTLY_ONCE';
+SET 'pipeline.parallelism'             = '8';
+
+-- 1) 注册 Iceberg Catalog（指向存储层部署的 HMS）
+CREATE CATALOG iceberg_hms WITH (
+  'type'         = 'iceberg',
+  'catalog-type' = 'hive',
+  'uri'          = 'thrift://hms.lakehouse.local:9083',
+  'warehouse'    = 's3a://lakehouse/warehouse',
+  's3.endpoint'  = 'http://minio.lakehouse.local:9000',
+  's3.path.style.access' = 'true'
+);
+
+-- 2) CDC 源表：primary key 让引擎按 key 路由，更新走 retract/upsert 通道
+CREATE TABLE orders_src (
+  order_id     BIGINT,
+  user_id      STRING,
+  order_amount DECIMAL(12, 2),
+  order_ts     TIMESTAMP(3),
+  op_type      STRING,
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'connector'         = 'mysql-cdc',
+  'hostname'          = 'mysql.lakehouse.local',
+  'port'              = '3306',
+  'username'          = 'flink_cdc',
+  'password'          = '******',
+  'database-name'     = 'shop',
+  'table-name'        = 'orders',
+  'scan.startup.mode' = 'initial',        <span class="comment">-- 先全量快照，再无缝接 binlog</span>
+  'server-time-zone'  = 'Asia/Shanghai'
+);
+
+-- 3) 目标表：Iceberg 主键表（分区列必须包含在主键中，upsert 才能定位分区）
+CREATE TABLE iceberg_hms.lakehouse.dws_orders (
+  order_id     BIGINT,
+  user_id      STRING,
+  order_amount DECIMAL(12, 2),
+  order_ts     TIMESTAMP(3),
+  dt           DATE,
+  PRIMARY KEY (order_id, dt) NOT ENFORCED
+) PARTITIONED BY (dt)
+WITH (
+  'format-version'               = '2',
+  'write.format.default'         = 'parquet',
+  'write.target-file-size-bytes' = '134217728',   <span class="comment">-- 128MB，流式写入适当小于批</span>
+  'write.upsert.enabled'         = 'true',        <span class="comment">-- 主键 upsert：变更只改受影响记录</span>
+  'write.metadata.delete-after-commit.enabled' = 'true'
+);
+
+-- 4) 持续同步：每 2 分钟一次 Checkpoint 即一次 Iceberg 提交
+INSERT INTO iceberg_hms.lakehouse.dws_orders
+SELECT order_id, user_id, order_amount, order_ts, DATE(order_ts) AS dt
+FROM orders_src;</code></pre>
+
+      <h3>Checkpoint 关键配置</h3>
+      <pre><code># flink-conf.yaml：Checkpoint 与状态后端
+execution.checkpointing.interval: 2 min          <span class="comment"># 提交间隔 = 数据可见性延迟</span>
+execution.checkpointing.mode: EXACTLY_ONCE
+execution.checkpointing.timeout: 10 min
+execution.checkpointing.max-concurrent-checkpoints: 1
+execution.checkpointing.min-pause: 30 s          <span class="comment"># 两次快照间的最小间隔，防“追快照”</span>
+state.backend: rocksdb                           <span class="comment"># 大状态首选（1.19+ 改名 state.backend.type）</span>
+state.backend.incremental: true                  <span class="comment"># 增量快照，只上传变化 SST</span>
+state.checkpoints.dir: s3://flink/checkpoints
+state.checkpoints.num-retained: 3</code></pre>
+
+      <!-- ================================================= -->
+      <h2 id="unify">批流一体设计</h2>
+
+      <h3>Kappa vs Lambda</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Lambda 架构</th>
+            <th>Kappa 架构</th>
+            <th>湖仓批流一体（本教程方案）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>链路</td>
+            <td>批层 + 速层 + 合并层，三套代码</td>
+            <td>只有流，一条链路</td>
+            <td>流批两条链路，<strong>一套表、一套口径</strong></td>
+          </tr>
+          <tr>
+            <td>存储</td>
+            <td>实时表 + 离线表双份</td>
+            <td>消息队列为唯一真相，重算靠重放</td>
+            <td>Iceberg 单一存储，快照即版本</td>
+          </tr>
+          <tr>
+            <td>历史回溯</td>
+            <td>批层天然支持</td>
+            <td>受队列保留期制约，久远历史难重放</td>
+            <td>时间旅行 + 按分区回刷，任意重算</td>
+          </tr>
+          <tr>
+            <td>一致性</td>
+            <td>批/速结果对账是常态痛点</td>
+            <td>单一引擎，口径一致但延迟耦合</td>
+            <td>流写批读同一快照，读写快照隔离</td>
+          </tr>
+          <tr>
+            <td>复杂度</td>
+            <td>最高（双倍维护）</td>
+            <td>最低，但流引擎承担全部负载</td>
+            <td>中：多一个引擎，少两套表</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>“流写批读”的落地模式</h3>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>流侧（Flink）职责</strong>：CDC 捕获 → 清洗标准化 → 实时打宽 → upsert 写 Iceberg 主键表；
+          保证分钟级可见与记录级正确性；只做“增量能算清楚”的逻辑。
+        </div>
+        <div class="callout">
+          <strong>批侧（Spark）职责</strong>：历史分区回刷/补数、全量重算与口径修正、跨长周期的复杂 join 与 ML 训练；
+          写入走 snapshot 覆盖（overwrite），与流写入快照隔离互不干扰。
+        </div>
+      </div>
+      <p>两股写入并发作用于同一张表时，Iceberg 的乐观并发机制会校验冲突：不同分区的写直接并行成功；
+        同分区的“流 upsert + 批 overwrite”则后者提交时校验失败并重试——<strong>把批回刷设计在独立分区</strong>（如按 dt 刷历史）
+        可以从根上避开冲突重试。</p>
+
+      <h3>Mini-Batch 写入：提交间隔与 Checkpoint 对齐</h3>
+      <p>Flink 的 Iceberg sink <strong>只在 Checkpoint 时提交</strong>，因此“提交间隔 = Checkpoint 间隔”，三者必须联动规划：</p>
+      <ul>
+        <li><span class="tag">间隔过短</span>（如 30s）：每分钟 2 个快照，manifest/小文件爆炸，查询 planning 陡增；</li>
+        <li><span class="tag">间隔过长</span>（如 30min）：下游实时性不可接受，故障时状态回放代价大；</li>
+        <li><span class="tag">经验公式</span>：<code>间隔内单分区写入量 ÷ target-file-size ≈ 1~2 个文件</code>，
+          反推合理间隔（生产常见 1–5 分钟起步）。</li>
+      </ul>
+      <pre><code>-- upsert 与可见性的关键开关（表属性或 OPTIONS 提示二选一）
+INSERT INTO iceberg_hms.lakehouse.dws_orders
+/*+ OPTIONS(
+      'write.upsert.enabled' = 'true',            <span class="comment">-- 主键表记录级更新，不重写整个文件</span>
+      'write.target-file-size-bytes' = '134217728'
+   ) */
+SELECT order_id, user_id, order_amount, order_ts, DATE(order_ts) AS dt
+FROM orders_src;
+
+<span class="comment">-- 作业侧：提交节奏与 Checkpoint 严格对齐，二者是同一个东西</span>
+SET 'execution.checkpointing.interval' = '2min';
+SET 'execution.checkpointing.mode'     = 'EXACTLY_ONCE';</code></pre>
+
+      <div class="callout-warn">
+        <strong>upsert 表的读放大</strong>：每次更新会追加“等值删除文件”（equality delete），读方需要 merge 数据文件与删除文件，
+          读写比例恶化后查询显著变慢。必须把 Spark compaction（rewrite_data_files）纳入固定调度，
+          建议按分区做 <code>binpack + sort</code> 合并，低峰期执行。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="tuning">计算层调优要点</h2>
+
+      <h3>1. 资源模型：并行度 = 分区数</h3>
+      <p>湖仓引擎的并行度最终由“数据被切成多少片”决定，两套公式必须烂熟于心：</p>
+      <pre><code>【Spark】
+总核数 C   = num-executors × executor-cores
+shuffle 并行度(spark.sql.shuffle.partitions) ≈ (2 ~ 3) × C
+Executor 内存 ≈ executor-cores × (4 ~ 8 GB) + memoryOverhead
+
+【Flink】
+总 slot = taskmanager 数 × 每 TM slot 数
+作业并行度 P ≤ 总 slot（同作业算子可共享 slot，网络缓冲 ≈ P^2 级增长）
+
+【Iceberg 写入侧（Flink sink）】
+每次提交文件数 ≈ sink 并行度 × 活跃分区数
+单文件大小 ≈ 间隔内写入量 ÷ (sink 并行度 × 活跃分区数)
+→ 文件数与大小同时达标的调节旋钮只有两个：checkpoint 间隔 与 sink 并行度</code></pre>
+
+      <h3>2. 内存配置经验</h3>
+      <pre><code># Spark：堆内三分（执行/存储/用户）+ 堆外一块
+spark.memory.fraction=0.80             # 执行+存储 占 (堆-300MB) 比例
+spark.memory.storageFraction=0.30      # 存储下限；缓存重的作业调高
+spark.executor.memoryOverhead=4g       # 堆外：Arrow/Iceberg/网络缓冲
+
+# Flink：进程总内存一切从简，让框架自己切
+taskmanager.memory.process.size=8g     # TM 进程总内存（推荐显式锁定）
+taskmanager.memory.managed.fraction=0.4  # RocksDB / 排序 / 缓存托管内存
+taskmanager.memory.network.max=1g      # shuffle 网络缓冲上限
+<span class="comment"># 经验：TM 堆 2-4GB/slot、单 slot 2GB 起步；状态大就上 RocksDB + managed</span></code></pre>
+
+      <h3>3. Shuffle 与网络</h3>
+      <pre><code># Spark：shuffle 写缓冲与拉取
+spark.shuffle.file.buffer=1m                # 每分区写缓冲，大分区表调大
+spark.reducer.maxSizeInFlight=96m           # 每个 reduce 任务的拉取总量
+spark.shuffle.io.maxRetries=10              # 网络抖动重试，避免整个 Stage 失败
+spark.shuffle.io.retryWait=15s
+spark.maxRemoteBlockSizeFetchToMem=512m     # 超过此值的远端块直接落盘防 OOM
+
+# Flink：网络缓冲
+taskmanager.memory.network.min=256mb
+taskmanager.memory.network.max=1gb
+taskmanager.network.numBuffersPerChannel=2  <span class="comment"># 反压时可下调换内存</span></code></pre>
+
+      <h3>4. Checkpoint 大小控制</h3>
+      <p>“Checkpoint 慢 → 反压 → 数据延迟”是实时链路最常见的事故链。控制手段按优先级：</p>
+      <pre><code># flink-conf.yaml
+state.backend: rocksdb                          <span class="comment"># 大状态必选</span>
+state.backend.incremental: true                 <span class="comment"># 增量快照：只上传变化部分</span>
+state.backend.rocksdb.memory.managed: true      <span class="comment"># RocksDB 内存托管，防各 TM 自行膨胀</span>
+execution.checkpointing.aligned-checkpoint-timeout: 5 min  <span class="comment"># 对齐超时自动转非对齐</span>
+
+-- SQL 作业：能遗忘的状态尽早遗忘（如 24h + 1h 兜底）
+SET 'table.exec.state.ttl' = '25 h';</code></pre>
+      <ul>
+        <li><strong>状态瘦身</strong>：窗口长度、去重集合、join 间隔都直接进状态；TTL 是第一杠杆；</li>
+        <li><strong>减少状态化算子</strong>：能下推到 Iceberg upsert 的“记录级合并”就不要在 Flink 里开大窗口聚合；</li>
+        <li><strong>增量 + 异步</strong>：RocksDB 增量快照 + 异步 barrier 处理，让 Checkpoint 对吞吐的影响降到 5% 以内；</li>
+        <li><strong>观测兜底</strong>：Checkpoint 持续时间、对齐时间、状态大小三个指标必须告警（见可观测一章）。</li>
+      </ul>
+
+      <div class="callout-best">
+        <strong>生产经验总结</strong>：先把“单文件大小 + 每次提交文件数”算清楚再定 checkpoint 间隔；
+          Spark 作业默认开 AQE；Flink 作业上线前做一次 savepoint 兼容性演练；所有调优都以
+          “引擎指标（UI）+ 存储指标（文件数/planning 耗时）”双视角验证，只看一边都会误判。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="boundary">适用边界</h2>
+      <p>“双引擎”不是教条，选型要回到业务延迟与状态复杂度本身：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Apache Spark</th>
+            <th>Apache Flink</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>延迟要求</td>
+            <td>分钟级以上批处理即可满足</td>
+            <td>秒级/亚秒级持续低延迟</td>
+          </tr>
+          <tr>
+            <td>状态管理</td>
+            <td>微批语义，大状态与长窗口偏弱</td>
+            <td>一等公民：RocksDB 大状态、TTL、savepoint 热升级</td>
+          </tr>
+          <tr>
+            <td>复杂窗口/乱序</td>
+            <td>滚动/滑动为主，事件时间支持有限</td>
+            <td>会话窗、自定义触发器、watermark 体系完备</td>
+          </tr>
+          <tr>
+            <td>生态位</td>
+            <td>批 / ML / Graph / SQL 最全，离线生态无敌</td>
+            <td>CDC、CEP、状态机等流生态最强</td>
+          </tr>
+          <tr>
+            <td>吞吐特征</td>
+            <td>超大批吞吐高，作业即起即走</td>
+            <td>持续稳定高吞吐，资源利用率均衡</td>
+          </tr>
+          <tr>
+            <td>运维成本</td>
+            <td>低：失败重跑即可</td>
+            <td>高：常驻作业需 savepoint 升级与状态兼容管理</td>
+          </tr>
+          <tr>
+            <td>典型湖仓角色</td>
+            <td>离线回刷、宽表重算、ML 训练</td>
+            <td>CDC 入湖、实时打宽、指标流</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>还有两个“不要用它们硬扛”的边界：<strong>交互式亚秒级点查</strong>交给 Trino/Doris（见查询层一章）；
+        <strong>高并发在线服务</strong>交给 OLAP/KV 引擎（判断标准见<a href="storage.html#boundary">存储层 · 适用边界</a>）。
+        湖仓的优雅之处正在于此——引擎各就各位，数据只有一份。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>前置：存储与表格式层</h3>
+          <p>回顾 Iceberg 元数据树、隐藏分区与快照协议——计算层一切能力的物理基础。</p>
+          <a class="card-link" href="storage.html">进入复习 →</a>
+        </div>
+        <div class="card">
+          <h3>下一站：查询层</h3>
+          <p>Trino / Doris 如何直读湖仓表，补齐交互式分析与联邦查询拼图。</p>
+          <a class="card-link" href="query.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>延伸：数据集成</h3>
+          <p>CDC 采集、批量同步与整库入湖的工程细节。</p>
+          <a class="card-link" href="integration.html">进入学习 →</a>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>小结</strong>：计算层的价值 = <strong>用对引擎</strong>（Spark 批 / Flink 流）+ <strong>对齐存储节奏</strong>
+          （checkpoint 间隔 ↔ 提交间隔 ↔ 文件大小）+ <strong>管好状态与倾斜</strong>。做到这三点，
+          “流写批读”就不再是一句口号，而是可量化、可运维的生产链路。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚 ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

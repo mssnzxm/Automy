@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>可观测性层 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <!-- 本页导航目录（sticky 侧栏） -->
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本层定位</a>
+      <a href="#metrics">指标体系设计</a>
+      <a href="#prometheus">Prometheus</a>
+      <a href="#grafana">Grafana</a>
+      <a href="#efk">EFK 日志链路</a>
+      <a href="#lakehouse-monitor">湖仓特有监控点</a>
+      <a href="#tuning">调优要点与边界</a>
+    </aside>
+
+    <!-- 正文内容区 -->
+    <main class="content">
+
+      <h1 id="intro">可观测性层</h1>
+      <div class="page-intro">
+        本页讲解湖仓一体架构的可观测性建设：以 Prometheus 为核心的指标采集与告警、以 EFK 为核心的日志链路、以 Grafana 为核心的分层看板。学完本页，你将能够按"基础设施 → 组件 → 作业 → 业务"四层设计湖仓指标体系，落地告警规则与日志检索，并掌握小文件增长、Compaction 积压、快照堆积等湖仓特有监控点。
+      </div>
+
+      <div class="arch-layer">看板层：Grafana（分层大盘 · 变量下钻 · 告警视图）</div>
+      <div class="arch-layer">指标层：Prometheus + Alertmanager（指标采集 · PromQL · 分组抑制告警）</div>
+      <div class="arch-layer">日志层：EFK（Filebeat → Kafka → Elasticsearch → Kibana）</div>
+      <div class="arch-layer">被观测对象：基础设施 · 组件（YARN/HDFS/Kafka）· 作业（Spark/Flink）· 业务（入湖延迟/新鲜度）</div>
+
+      <p>可观测性的三大支柱各司其职：<strong>指标（Metrics）</strong>回答"现在怎么样"——低成本的数值时序，适合告警与趋势判断；<strong>日志（Logs）</strong>回答"为什么这样"——故障时刻的现场细节，适合根因定位；<strong>看板（Dashboards）</strong>把两者组织成"从全局到单点"的下钻路径，是值班同学的第一入口。湖仓链路长（采集 → 入湖 → 清洗 → 聚合 → 服务），任何一环都可能成为故障源，因此观测体系必须<strong>分层设计、逐层下钻</strong>，而不是堆一堆零散面板。</p>
+
+      <div class="callout">
+        <strong>排查路径记忆法</strong>：业务异常 → 看<strong>业务层指标</strong>（新鲜度/延迟）定位到链路环节 → 看<strong>作业层</strong>（时长/失败率）定位到具体作业 → 看<strong>组件层</strong>（队列/Kafka/NN）定位到资源瓶颈 → 用 Kibana 检索该作业该时段的<strong>日志</strong>确认根因。
+      </div>
+
+      <div class="diagram">
+        <svg width="700" height="240" viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="可观测性三支柱示意图">
+          <defs>
+            <marker id="obs-arr" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#0f766e"></path>
+            </marker>
+          </defs>
+          <rect x="210" y="12" width="280" height="50" rx="8" fill="#0f766e"></rect>
+          <text x="350" y="32" text-anchor="middle" font-size="14" fill="#ffffff">Grafana 看板</text>
+          <text x="350" y="51" text-anchor="middle" font-size="11" fill="#ccfbf1">分层大盘 · 变量下钻 · 告警视图</text>
+          <rect x="10" y="100" width="330" height="50" rx="8" fill="#14b8a6"></rect>
+          <text x="175" y="120" text-anchor="middle" font-size="13" fill="#ffffff">Prometheus 指标体系</text>
+          <text x="175" y="139" text-anchor="middle" font-size="11" fill="#ecfeff">exporter 生态 · PromQL · Alertmanager 分组抑制</text>
+          <rect x="360" y="100" width="330" height="50" rx="8" fill="#14b8a6"></rect>
+          <text x="525" y="120" text-anchor="middle" font-size="13" fill="#ffffff">EFK 日志链路</text>
+          <text x="525" y="139" text-anchor="middle" font-size="11" fill="#ecfeff">Filebeat → Kafka → Elasticsearch → Kibana</text>
+          <rect x="10" y="182" width="680" height="46" rx="8" fill="#f0fdfa" stroke="#0f766e"></rect>
+          <text x="350" y="202" text-anchor="middle" font-size="13" fill="#0f766e">被观测对象</text>
+          <text x="350" y="220" text-anchor="middle" font-size="11" fill="#64748b">基础设施 · 组件（YARN / HDFS / Kafka）· 作业（Spark / Flink）· 业务（入湖延迟 / 数据新鲜度）</text>
+          <path d="M300,64 L200,96" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#obs-arr)"></path>
+          <path d="M400,64 L500,96" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#obs-arr)"></path>
+          <path d="M175,152 L175,178" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#obs-arr)"></path>
+          <path d="M525,152 L525,178" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#obs-arr)"></path>
+        </svg>
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="metrics">指标体系设计</h2>
+
+      <p>指标不是越多越好，而是<strong>每个告警都必须有人在等</strong>。湖仓指标体系建议按四层组织：上层回答业务问题，下层支撑技术归因，下层异常要通过上层体现价值，上层异常要能下钻到下层定位根因。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>代表指标</th>
+            <th>采集来源</th>
+            <th>建议告警阈值</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="4">基础设施层</td>
+            <td>CPU 使用率</td>
+            <td>node_exporter（<code>node_cpu_seconds_total</code>）</td>
+            <td>&gt; 85% 持续 5 分钟</td>
+          </tr>
+          <tr>
+            <td>磁盘 IO 利用率</td>
+            <td>node_exporter（<code>node_disk_io_time_seconds_total</code>）</td>
+            <td>&gt; 90% 持续 10 分钟</td>
+          </tr>
+          <tr>
+            <td>磁盘空间使用率</td>
+            <td>node_exporter（<code>node_filesystem_avail_bytes</code>）</td>
+            <td>&gt; 80% 警告 / &gt; 90% 严重</td>
+          </tr>
+          <tr>
+            <td>网络带宽利用率</td>
+            <td>node_exporter（<code>node_network_*_bytes_total</code>）</td>
+            <td>&gt; 链路带宽 80% 持续 5 分钟</td>
+          </tr>
+          <tr>
+            <td rowspan="4">组件层</td>
+            <td>YARN 队列使用率</td>
+            <td>RM JMX（QueueMetrics）</td>
+            <td>&gt; 90% 持续 15 分钟（触发容量评估）</td>
+          </tr>
+          <tr>
+            <td>Kafka 消费积压（lag）</td>
+            <td>kafka_exporter</td>
+            <td>&gt; 10 万条，或持续增长 10 分钟</td>
+          </tr>
+          <tr>
+            <td>HDFS NN GC 耗时</td>
+            <td>jmx_exporter（<code>jvm_gc_collection_seconds_sum</code>）</td>
+            <td>5 分钟累计 &gt; 3s</td>
+          </tr>
+          <tr>
+            <td>HDFS NN RPC 队列/堆使用</td>
+            <td>NN JvmMetrics / RpcMetrics</td>
+            <td>堆 &gt; 75% 警告 / RPC 队列 &gt; 100 持续 5 分钟</td>
+          </tr>
+          <tr>
+            <td rowspan="3">作业层</td>
+            <td>作业时长</td>
+            <td>DS API → PushGateway（每作业回写）</td>
+            <td>&gt; 同任务历史 P50 × 1.5</td>
+          </tr>
+          <tr>
+            <td>作业失败率</td>
+            <td>DS 任务计数（<code>ds_task_failed_total</code>）</td>
+            <td>30 分钟窗口 &gt; 5%</td>
+          </tr>
+          <tr>
+            <td>Checkpoint 时长 / 大小</td>
+            <td>Flink Prometheus Reporter</td>
+            <td>时长 &gt; 60s；大小环比 +50%</td>
+          </tr>
+          <tr>
+            <td rowspan="3">业务层</td>
+            <td>入湖延迟</td>
+            <td>自定义 exporter（源端事件时间 − 入湖完成时间）</td>
+            <td>&gt; 15 分钟警告 / &gt; 30 分钟严重</td>
+          </tr>
+          <tr>
+            <td>数据新鲜度</td>
+            <td>最新分区距当前时间（SQL exporter 定时查询）</td>
+            <td>&gt; 2 小时警告 / &gt; 4 小时严重</td>
+          </tr>
+          <tr>
+            <td>数据质量得分</td>
+            <td>质量校验作业回写（规则通过率加权）</td>
+            <td>&lt; 95 分警告 / &lt; 90 分严重</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="grid-2">
+        <div class="callout">
+          <strong>指标设计原则</strong>：组件层用 USE 方法（Utilization / Saturation / Errors）扫盲；作业与业务层用 SLI 思维——先定义"用户可感知的健康"（新鲜度、延迟、得分），再反推需要哪些技术指标支撑。
+        </div>
+        <div class="callout-warn">
+          <strong>阈值不是抄来的</strong>：上表阈值是多数湖仓集群的起步参考值，上线后应结合两周的真实分布（P50/P95）校准；只告警"持续异常"（带 for 持续时间），避免瞬时毛刺引发告警疲劳。
+        </div>
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="prometheus">Prometheus</h2>
+
+      <h3>1. 架构与 exporter 生态</h3>
+      <p>Prometheus 采用<strong>拉取（Pull）模型</strong>：Server 周期性抓取各 exporter 暴露的 <code>/metrics</code> 端点，本地 TSDB 存储，经 PromQL 查询；告警规则在 Server 端评估，触发后推给 Alertmanager 分发。湖仓集群的 exporter 布局：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>exporter / 指标源</th>
+            <th>部署位置</th>
+            <th>覆盖对象</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>node_exporter</td>
+            <td>每台机器（物理机/容器宿主机）</td>
+            <td>CPU、内存、磁盘 IO、网络、文件系统</td>
+          </tr>
+          <tr>
+            <td>jmx_exporter（javaagent）</td>
+            <td>HDFS NN/DN、YARN RM/NM、Kafka Broker、Trino 进程侧</td>
+            <td>JVM（堆/GC）、组件内部指标（队列、RPC、分区）</td>
+          </tr>
+          <tr>
+            <td>kafka_exporter</td>
+            <td>任意节点连接 Kafka</td>
+            <td>topic/分区 offset、消费组 lag</td>
+          </tr>
+          <tr>
+            <td>Flink Prometheus Reporter</td>
+            <td>JobManager / TaskManager</td>
+            <td>作业运行时、Checkpoint、背压、算子水位</td>
+          </tr>
+          <tr>
+            <td>PushGateway</td>
+            <td>中心化部署</td>
+            <td>短生命周期批作业（Spark/DS 任务结束时 push 自定义指标）</td>
+          </tr>
+          <tr>
+            <td>自定义 exporter / SQL exporter</td>
+            <td>中心化部署</td>
+            <td>湖仓表健康度：小文件数、快照数、新鲜度、质量得分</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-warn">
+        <strong>PushGateway 的陈旧问题</strong>：PushGateway 中的指标不会自动过期，作业失败导致"最后一次成功"的数值会一直驻留。务必在抓取配置中对 pushgateway 任务设置 <code>honor_timestamps</code>，并在每次作业开始时先写 0 或用 <code>push_all</code> 全量覆盖，保证"看不到"等于"没跑"。
+      </div>
+
+      <h3>2. PromQL 常用查询</h3>
+      <pre><code><span class="comment"># 1) Kafka 消费积压：分区最新 offset − 消费组已提交 offset</span>
+sum by (consumergroup, topic) (kafka_consumergroup_group_lag)
+
+<span class="comment"># 2) 消费速率（条/秒），用于估算积压追平时间 = lag ÷ rate</span>
+sum by (topic) (rate(kafka_consumergroup_group_current_offset[5m]))
+
+<span class="comment"># 3) 调度作业失败率：30 分钟窗口失败任务占比</span>
+sum(rate(ds_task_failed_total[30m])) / clamp_min(sum(rate(ds_task_total[30m])), 1)
+
+<span class="comment"># 4) YARN 离线队列内存使用率（RM QueueMetrics 经 JMX 暴露，指标名以实际输出为准）</span>
+yarn_queue_allocated_mb{queue="offline"} / yarn_queue_total_mb{queue="offline"}
+
+<span class="comment"># 5) HDFS NameNode 5 分钟内 Full GC 累计秒数</span>
+increase(jvm_gc_collection_seconds_sum{role="namenode", gc="G1 Old Generation"}[5m])
+
+<span class="comment"># 6) 节点磁盘 IO 利用率（device 正则按实际盘名调整）</span>
+rate(node_disk_io_time_seconds_total{device=~"sd.*|nvme.*"}[5m])</code></pre>
+
+      <h3>3. Alertmanager：分组、抑制、静默</h3>
+      <p>告警规则（Prometheus 侧）示例——覆盖组件层与作业/业务层两个规则组：</p>
+
+      <pre><code><span class="comment"># prometheus/rules/lakehouse-alerts.yml</span>
+groups:
+  - name: lakehouse.component          <span class="comment"># 组件层规则组</span>
+    rules:
+      - alert: NodeCpuHigh
+        expr: (100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) &gt; 85
+        for: 5m
+        labels:
+          severity: warning
+          layer: infra
+        annotations:
+          summary: "节点 CPU 持续偏高：{{ $labels.instance }}"
+          runbook: "http://wiki.example/runbook/node-cpu"
+
+      - alert: KafkaConsumerLagHigh
+        expr: sum by (consumergroup, topic) (kafka_consumergroup_group_lag) &gt; 100000
+        for: 10m
+        labels:
+          severity: warning
+          layer: component
+        annotations:
+          summary: "消费组 {{ $labels.consumergroup }} 在 {{ $labels.topic }} 积压 {{ $value }} 条"
+
+      - alert: NameNodeGcPause
+        expr: increase(jvm_gc_collection_seconds_sum{role="namenode", gc="G1 Old Generation"}[5m]) &gt; 3
+        labels:
+          severity: critical
+          layer: component
+        annotations:
+          summary: "HDFS NameNode 5 分钟 Full GC 累计 {{ $value }}s，存在全局卡顿风险"
+
+  - name: lakehouse.job-biz            <span class="comment"># 作业与业务层规则组</span>
+    rules:
+      - alert: BatchJobFailureRate
+        expr: |
+          sum(rate(ds_task_failed_total[30m]))
+            / clamp_min(sum(rate(ds_task_total[30m])), 1) &gt; 0.05
+        for: 15m
+        labels:
+          severity: critical
+          layer: job
+        annotations:
+          summary: "调度作业 30 分钟失败率超过 5%"
+
+      - alert: IngestDelayHigh
+        expr: max(lakehouse_ingest_lag_seconds) &gt; 900
+        for: 10m
+        labels:
+          severity: warning
+          layer: business
+        annotations:
+          summary: "入湖延迟超过 15 分钟，请下钻查看同步作业状态"</code></pre>
+
+      <p>Alertmanager 侧路由配置——分组、抑制、静默三件套：</p>
+
+      <pre><code><span class="comment"># alertmanager.yml</span>
+route:
+  receiver: team-default
+  group_by: ['alertname', 'cluster']     <span class="comment"># 同名告警打包发送，减少轰炸</span>
+  group_wait: 30s                        <span class="comment"># 组内等待归并的时间窗</span>
+  group_interval: 5m                     <span class="comment"># 同组两次通知的最小间隔</span>
+  repeat_interval: 4h                    <span class="comment"># 未恢复时的重复提醒周期</span>
+  routes:
+    - matchers: ['severity="critical"']  <span class="comment"># 严重级：升级到值班电话</span>
+      receiver: oncall-phone
+      continue: true
+    - matchers: ['team="stream"']        <span class="comment"># 流团队告警路由到专属群</span>
+      receiver: stream-wecom
+
+inhibit_rules:                           <span class="comment"># 抑制：critical 触发时压掉同源 warning</span>
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ['cluster', 'alertname']
+
+receivers:
+  - name: team-default
+    webhook_configs:
+      - url: 'http://wecom-proxy/alert/default'
+  - name: oncall-phone
+    webhook_configs:
+      - url: 'http://pager-adapter/critical'
+  - name: stream-wecom
+    webhook_configs:
+      - url: 'http://wecom-proxy/alert/stream'</code></pre>
+
+      <pre><code><span class="comment"># 静默（Silence）：维护窗口内按匹配器屏蔽告警，事由可审计</span>
+amtool silence add \
+  --comment "node-03 换盘维护，CPU/磁盘告警预期内" \
+  --duration 4h \
+  alertname=~"NodeCpu.*|NodeDisk.*" instance=node-03
+
+<span class="comment"># 查看与过期静默规则</span>
+amtool silence ls
+amtool silence expire &lt;silence-id&gt;</code></pre>
+
+      <div class="callout-best">
+        <strong>告警分级实践</strong>：<code>critical</code> 打电话（15 分钟内必须响应）、<code>warning</code> 进群消息（当天处理）、<code>info</code> 仅看板展示不推送。每周回顾一次告警量与响应记录：无人响应的告警要么降级要么删除。
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="grafana">Grafana</h2>
+
+      <h3>1. 看板分层设计</h3>
+      <p>湖仓看板的最大反模式是"一个大盘塞进一切"。正确姿势是三层漏斗，上层回答"有没有事"，下层回答"是哪里的事"：</p>
+      <div class="arch-layer">L1 集群概览：全局状态灯（CPU/存储水位、YARN 总量与 pending、Kafka 总 lag、NN GC、今日作业失败数）</div>
+      <div class="arch-layer">L2 队列 / 主题下钻：单队列资源走势、单 topic 分区 lag 明细、单组件 JVM 与 RPC</div>
+      <div class="arch-layer">L3 单作业下钻：Spark Stage 与 Executor、Flink Checkpoint 曲线与背压，并携带跳转 Kibana 的日志链接</div>
+
+      <p>层与层之间用<strong>面板 Data Link</strong> 串联：L1 的队列面板点击跳转到 L2 大盘并自动带入 <code>$queue</code> 变量；L2 的作业面板跳转 L3 并带入 <code>$job_id</code>；L3 面板携带时间范围直链 Kibana Discover。值班同学从收到告警到看到日志现场，全程不需要手动改查询条件。</p>
+
+      <h3>2. 变量与面板设计</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>变量</th>
+            <th>类型</th>
+            <th>取值 Query 示例</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>$cluster</code></td>
+            <td>Query</td>
+            <td><code>label_values(up, cluster)</code></td>
+            <td>环境切换（prod / staging）</td>
+          </tr>
+          <tr>
+            <td><code>$queue</code></td>
+            <td>Query</td>
+            <td><code>label_values(yarn_queue_allocated_mb, queue)</code></td>
+            <td>YARN 队列下钻</td>
+          </tr>
+          <tr>
+            <td><code>$topic</code></td>
+            <td>Query</td>
+            <td><code>label_values(kafka_consumergroup_group_lag, topic)</code></td>
+            <td>Kafka 主题下钻</td>
+          </tr>
+          <tr>
+            <td><code>$job_id</code></td>
+            <td>Query</td>
+            <td><code>label_values(flink_jobmanager_job_lastCheckpointDuration, job_id)</code></td>
+            <td>单作业实例下钻</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table>
+        <thead>
+          <tr>
+            <th>面板类型</th>
+            <th>适用内容</th>
+            <th>湖仓示例</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Stat（大数/状态灯）</td>
+            <td>单值 + 阈值着色</td>
+            <td>集群可用率、今日失败作业数、最大 lag</td>
+          </tr>
+          <tr>
+            <td>Time series</td>
+            <td>走势与同环比</td>
+            <td>队列内存使用率、作业时长 P50/P95 曲线</td>
+          </tr>
+          <tr>
+            <td>Heatmap</td>
+            <td>分布型指标</td>
+            <td>查询延迟分布、Checkpoint 耗时分布</td>
+          </tr>
+          <tr>
+            <td>Table</td>
+            <td>明细列表 + 可复制字段</td>
+            <td>慢查询清单、失败任务清单（带日志链接）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-best">
+        <strong>看板所见 = 告警所判</strong>：面板阈值线必须与告警规则表达式保持一致（面板上画 85% 的红线，告警也应在 85% 触发），否则会出现"看板一切正常却半夜被告警叫醒"的信任危机。每个告警面板的描述中附上 runbook 链接。
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="efk">EFK 日志链路</h2>
+
+      <h3>1. 全链路拓扑</h3>
+      <p>EFK = Filebeat（采集）+ Elasticsearch（存储与检索）+ Kibana（查询与可视化）。湖仓集群日志量往往在百 GB/天量级，直接把 Filebeat 打到 ES 会在重写/恢复期形成反压，因此推荐引入 Kafka 作为缓冲层削峰：</p>
+
+      <div class="diagram">
+        <svg width="700" height="190" viewBox="0 0 700 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="EFK 日志链路示意图">
+          <defs>
+            <marker id="efk-arr" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#0f766e"></path>
+            </marker>
+          </defs>
+          <rect x="10" y="40" width="155" height="60" rx="8" fill="#14b8a6"></rect>
+          <text x="87" y="64" text-anchor="middle" font-size="13" fill="#ffffff">Filebeat</text>
+          <text x="87" y="83" text-anchor="middle" font-size="11" fill="#ecfeff">多来源采集 · 打标</text>
+          <rect x="185" y="40" width="155" height="60" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-dasharray="6 4"></rect>
+          <text x="262" y="64" text-anchor="middle" font-size="13" fill="#0f766e">Kafka</text>
+          <text x="262" y="83" text-anchor="middle" font-size="11" fill="#64748b">缓冲削峰（可选）</text>
+          <rect x="360" y="40" width="155" height="60" rx="8" fill="#0f766e"></rect>
+          <text x="437" y="64" text-anchor="middle" font-size="13" fill="#ffffff">Elasticsearch</text>
+          <text x="437" y="83" text-anchor="middle" font-size="11" fill="#ccfbf1">存储 · 全文检索 · ILM</text>
+          <rect x="535" y="40" width="155" height="60" rx="8" fill="#14b8a6"></rect>
+          <text x="612" y="64" text-anchor="middle" font-size="13" fill="#ffffff">Kibana</text>
+          <text x="612" y="83" text-anchor="middle" font-size="11" fill="#ecfeff">Discover 检索 · 看板</text>
+          <path d="M87,100 L87,130 L437,130 L437,104" fill="none" stroke="#0f766e" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#efk-arr)"></path>
+          <text x="262" y="148" text-anchor="middle" font-size="11" fill="#64748b">小规模可跳过 Kafka 直写 ES（吞吐 &lt; 5 万行/秒）</text>
+          <line x1="169" y1="70" x2="181" y2="70" stroke="#0f766e" stroke-width="2" marker-end="url(#efk-arr)"></line>
+          <line x1="344" y1="70" x2="356" y2="70" stroke="#0f766e" stroke-width="2" marker-end="url(#efk-arr)"></line>
+          <line x1="519" y1="70" x2="531" y2="70" stroke="#0f766e" stroke-width="2" marker-end="url(#efk-arr)"></line>
+        </svg>
+      </div>
+
+      <h3>2. filebeat.yml 完整配置</h3>
+      <p>三个关键设计：<strong>多来源分 input</strong>（每类组件一个 input，便于差异化处理）；<strong>multiline 合并 Java stacktrace</strong>（不以时间戳开头的行为同一条日志）；<strong>fields 打标</strong>（cluster/service/role 贯穿到 Kibana 检索与 ILM）。</p>
+
+      <pre><code><span class="comment"># ---------- 1) HDFS NameNode：JVM 长堆栈需要 multiline 合并 ----------</span>
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/hadoop/*namenode*.log
+    fields:
+      cluster: prod-lakehouse
+      service: hdfs
+      role: namenode
+    fields_under_root: true        <span class="comment"># 字段平铺到根，KQL 直接用 service: hdfs</span>
+    multiline.pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'   <span class="comment"># 以时间戳开头才算新日志行</span>
+    multiline.negate: true
+    multiline.match: after
+    multiline.max_lines: 200       <span class="comment"># 单条日志合并上限，防畸形日志撑爆事件</span>
+    tags: ["hdfs"]
+
+  <span class="comment"># ---------- 2) Flink TaskManager：同样需要 stacktrace 合并 ----------</span>
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/flink/taskmanager*.log
+    fields:
+      cluster: prod-lakehouse
+      service: flink
+      role: taskmanager
+    fields_under_root: true
+    multiline.pattern: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'
+    multiline.negate: true
+    multiline.match: after
+    tags: ["flink"]
+
+  <span class="comment"># ---------- 3) 调度与同步组件日志 ----------</span>
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/dolphinscheduler/*.log
+      - /var/log/datax/*.log
+    fields:
+      cluster: prod-lakehouse
+      service: scheduler
+      role: worker
+    fields_under_root: true
+    tags: ["scheduler"]
+
+processors:
+  - add_host_metadata: ~          <span class="comment"># 自动补充 host.name / host.ip</span>
+  - add_fields:
+      target: ''
+      fields:
+        env: prod
+
+<span class="comment"># ---------- 输出：大规模走 Kafka 缓冲 ----------</span>
+output.kafka:
+  hosts: ["kafka1:9092", "kafka2:9092", "kafka3:9092"]
+  topic: "log_lakehouse_all"
+  required_acks: 1                 <span class="comment"># 性能与可靠性的折中</span>
+  compression: gzip
+  worker: 2
+
+<span class="comment"># ---------- 小规模直写 ES：注释掉 Kafka 输出后启用 ----------</span>
+<span class="comment"># output.elasticsearch:</span>
+<span class="comment">#   hosts: ["http://es-lb:9200"]</span>
+<span class="comment">#   index: "logs-lakehouse-%{+yyyy.MM.dd}"</span>
+<span class="comment">#   bulk_max_size: 4096</span></code></pre>
+
+      <h3>3. ES ILM 索引生命周期</h3>
+      <p>湖仓日志的访问特征是<strong>前 3 天高频检索、之后几乎不再访问</strong>，用 ILM 按热/温/冷/删除四阶段滚动，比手动 curator 定时任务可靠得多：</p>
+
+      <pre><code>PUT _ilm/policy/lakehouse-logs-policy
+{
+  "policy": {
+    "phases": {
+      "hot": {
+        "min_age": "0ms",
+        "actions": {
+          "rollover": { "max_primary_shard_size": "50gb", "max_age": "1d" },
+          "set_priority": { "priority": 100 }
+        }
+      },
+      "warm": {
+        "min_age": "3d",
+        "actions": {
+          "shrink": { "number_of_shards": 1 },
+          "forcemerge": { "max_num_segments": 1 },          <span class="comment">// 合并段，检索量骤降后压缩存储</span>
+          "allocate": { "number_of_replicas": 0,
+                        "require": { "data": "warm" } }
+        }
+      },
+      "cold": {
+        "min_age": "15d",
+        "actions": {
+          "set_priority": { "priority": 50 },
+          "allocate": { "require": { "data": "cold" } }      <span class="comment">// 开源版回退方案：挪到冷存储节点</span>
+        }
+      },
+      "delete": {
+        "min_age": "30d",
+        "actions": { "delete": {} }                        <span class="comment">// 保留 30 天，审计诉求可延长 cold 阶段</span>
+      }
+    }
+  }
+}
+
+<span class="comment"># 绑定到索引模板（新建索引自动应用）</span>
+PUT _index_template/logs-lakehouse
+{
+  "index_patterns": ["logs-lakehouse-*"],
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "lakehouse-logs-policy",
+      "index.lifecycle.rollover_alias": "logs-lakehouse",   <span class="comment">// rollover 需要别名配合</span>
+      "number_of_shards": 3,
+      "number_of_replicas": 1
+    }
+  }
+}</code></pre>
+
+      <h3>4. Kibana 检索用法</h3>
+      <p>Kibana Discover 使用 KQL（Kibana Query Language）做前缀式检索，配合 filebeat 打的 fields，常用姿势：</p>
+
+      <pre><code><span class="comment"># 1) 定位 Flink Checkpoint 相关的 ERROR 日志</span>
+service: "flink" and role: "taskmanager" and level: "ERROR" and message: *checkpoint*
+
+<span class="comment"># 2) 查被 YARN 杀掉的 Container（定位内存超限）</span>
+service: "yarn" and message: "Container killed on request" and cluster: "prod-lakehouse"
+
+<span class="comment"># 3) 按服务聚合 ERROR 数量：KQL 过滤后，用 Visualize</span>
+<span class="comment">#    按 service 做 Terms 聚合、按 @timestamp 做 Date histogram（每 5 分钟）</span>
+service: "spark" and level: "ERROR"</code></pre>
+
+      <div class="callout">
+        <strong>检索效率提醒</strong>：message 上的通配符（<code>*keyword*</code>）会退化成 term 全扫，先用 <code>service</code> / <code>level</code> / <code>host.name</code> 等结构化字段把范围收窄到分钟级 + 单服务，再对 message 做模糊——这是 Kibana 检索不卡的第一原则。
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="lakehouse-monitor">湖仓特有监控点</h2>
+
+      <p>通用大数据监控覆盖不到湖仓的"慢性病"：小文件、快照、Compaction 这些问题不报警、也不崩溃，只会让性能一寸寸劣化。以下五个监控点是湖仓集群的"体检必查项"：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>监控点</th>
+            <th>采集方式</th>
+            <th>Warning 阈值</th>
+            <th>Critical 阈值</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>小文件增长速率</td>
+            <td>SQL exporter 定时查 Iceberg <code>files</code> / Hudi 文件数元数据</td>
+            <td>单表日增 &gt; 500 文件</td>
+            <td>单表日增 &gt; 2000 或总量 &gt; 5 万</td>
+          </tr>
+          <tr>
+            <td>Compaction 积压</td>
+            <td>调度系统回写"上次成功 Compaction 距今时长"</td>
+            <td>&gt; 24 小时</td>
+            <td>&gt; 48 小时或连续 3 次失败</td>
+          </tr>
+          <tr>
+            <td>Iceberg 快照数量</td>
+            <td>SQL exporter 定时 <code>count(*)</code> 表的 <code>snapshots</code> 元数据表</td>
+            <td>&gt; 500</td>
+            <td>&gt; 2000（立即触发 expire）</td>
+          </tr>
+          <tr>
+            <td>Flink Checkpoint</td>
+            <td>Flink Prometheus Reporter（时长、失败计数）</td>
+            <td>时长 &gt; 60s 或大小环比 +50%</td>
+            <td>连续失败 ≥ 2 次立即告警</td>
+          </tr>
+          <tr>
+            <td>Trino 慢查询</td>
+            <td>Trino JMX（query execution 统计）</td>
+            <td>P95 &gt; 30s</td>
+            <td>单查询 &gt; 5 分钟或被 limit 杀掉的查询突增</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>湖仓表健康度类指标没有现成 exporter，用 <strong>SQL exporter 思路</strong>——定时执行元数据查询，把结果暴露为 Prometheus 指标：</p>
+
+      <pre><code><span class="comment">-- SQL exporter 定时执行：把湖仓表健康度变成指标</span>
+<span class="comment">-- 1) 快照堆积（对应 iceberg_snapshot_total 指标）</span>
+SELECT count(*) AS iceberg_snapshot_total FROM lakehouse.dws_orders_day.snapshots;
+
+<span class="comment">-- 2) 数据文件数（小文件规模，对应 iceberg_file_num）</span>
+SELECT count(*) AS iceberg_file_num FROM lakehouse.dws_orders_day.files;
+
+<span class="comment">-- 3) 数据新鲜度：最新分区距当前的小时数（对应 lakehouse_freshness_hours）</span>
+SELECT round((unix_timestamp() - unix_timestamp(max(dt), 'yyyy-MM-dd')) / 3600)
+       AS lakehouse_freshness_hours
+FROM lakehouse.dws_orders_day;</code></pre>
+
+      <pre><code><span class="comment"># Flink Checkpoint 告警规则（Prometheus 规则片段）</span>
+<span class="comment"># 时长超过 60s 预示背压或状态膨胀（间隔按流作业实际 checkpoint 配置调整）</span>
+flink_jobmanager_job_lastCheckpointDuration &gt; 60000
+
+<span class="comment"># 连续失败：5 分钟窗口内失败检查点增量 ≥ 2 次即为 Critical</span>
+increase(flink_jobmanager_job_numberOfFailedCheckpoints[5m]) &gt;= 2</code></pre>
+
+      <div class="callout-warn">
+        <strong>为什么要监控快照数量</strong>：Iceberg 的每个快照都持有数据文件引用，快照堆积不仅拖慢查询计划（manifest 扫描变重），还会让 <code>expire_snapshots</code> 的清理时间随快照数线性增长。超过 2000 个快照的表，往往还伴随"过期清理作业超时失败"的连锁反应——发现即处理。
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="tuning">调优要点与边界</h2>
+
+      <h3>1. 采样率与基数爆炸</h3>
+      <p>Prometheus 最常见的死法不是抓不动，而是<strong>时间序列基数爆炸</strong>——Spark/Flink 每个作业、每个 executor、每个算子都会生成带唯一标签的序列，高峰期序列数轻松破千万。治理手段：</p>
+      <pre><code><span class="comment"># 采集频率分级：基础设施 30s，组件 60s，业务指标 60s</span>
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: 'spark-pushgateway'
+    honor_labels: true
+    scrape_interval: 60s
+    metric_relabel_configs:
+      <span class="comment"># 1) 按 metric 名丢弃高基数序列（流式 gauge 常见每秒一变）</span>
+      - source_labels: [__name__]
+        regex: 'spark_.+_gauges_.+|spark_.+_live_.+'
+        action: drop
+      <span class="comment"># 2) 剔除高基数标签，保留聚合维度</span>
+      - action: labeldrop
+        regex: '(executor_id|attempt_id|application_id)'</code></pre>
+      <ul>
+        <li>容量参考：单实例活跃序列建议控制在 50 万以内，全集群控制在 5000 万以内；超限时优先 drop，其次才考虑分片（Thanos / VictoriaMetrics）；</li>
+        <li>抓取超时应小于抓取间隔的一半，并监控 <code>up == 0</code>、<code>scrape_duration_seconds &gt; interval × 0.8</code>——监控系统需要自己的监控。</li>
+      </ul>
+
+      <h3>2. 日志分级采集</h3>
+      <p>照单全收的日志采集会把 70% 的 ES 存储浪费在没人看的 INFO 上。在 Filebeat 端（越早丢弃成本越低）分级：</p>
+      <pre><code><span class="comment"># 日志分级：ERROR/FATAL 全量，DEBUG 直接丢弃，高噪服务的 INFO 也裁掉</span>
+processors:
+  - drop_event.when:
+      equals:
+        level: "DEBUG"
+  - drop_event.when:
+      and:
+        - equals:
+            level: "INFO"
+        - equals:
+            service: "yarn-nodemanager"     <span class="comment"># 心跳类 INFO 日志量大且无价值</span></code></pre>
+      <ul>
+        <li>ERROR / FATAL：全量采集，全链路可检索；</li>
+        <li>WARN：全量采集，但 ILM 缩短其 warm 停留（价值衰减快）；</li>
+        <li>INFO：仅保留服务边界事件（启停、拓扑变更），高噪服务直接在采集端丢弃。</li>
+      </ul>
+
+      <h3>3. 何时用 Loki 替代 ES</h3>
+      <div class="grid-2">
+        <div class="callout-best">
+          <strong>改用 Loki 的信号</strong>：日志检索模式固定为"按标签过滤 + 看原文"（服务/级别/host），不需要全文倒排与复杂聚合；日志量超过 1TB/天，ES 集群成本失控；团队已有对象存储，希望日志存储成本降一个数量级（Loki 只索引标签，压缩比远高于 ES）。
+        </div>
+        <div class="callout">
+          <strong>保留 ES 的理由</strong>：需要 KQL 式全文检索与多层聚合分析（安全审计、错误模式挖掘）；日志即数据（合规留档需要逐条检索）；EFK 生态已运转成熟，迁移收益不明显。湖仓生产常见组合是：基础设施/组件日志进 Loki，应用与审计日志进 ES。
+        </div>
+      </div>
+
+      <div class="callout-warn">
+        <strong>边界提醒</strong>：可观测性体系自身也可能成为故障源——Prometheus 单点、ES 磁盘写满、Filebeat 断链都会造成"盲飞"。对监控系统要做自监控（metrics 的 <code>up</code>、EFK 链路的 filebeat registry 滞后与 Kafka 日志 topic 的 consumer lag），并定期演练"告警链路是否真的能打通电话"。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
