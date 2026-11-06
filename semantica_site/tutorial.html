@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使用教程 · Semantica 文档中心</title>
+<meta name="description" content="Semantica 使用教程：界面导览、JupyterLab 实验、智能体提问与 MCP 接入。">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<div class="progress"></div>
+<header class="topbar">
+  <a class="brand" href="index.html">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#04171a" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5.5" r="2.2"/><circle cx="5.5" cy="16.5" r="2.2"/><circle cx="18.5" cy="16.5" r="2.2"/><path d="M10.7 7.4 6.9 14.6M13.3 7.4l3.8 7.2M7.7 16.5h8.6"/></svg></span>
+    <span>Semantica</span>
+    <span class="brand-sub">文档中心</span>
+  </a>
+  <nav class="topnav"><a href="index.html">概览</a><a href="architecture.html">架构设计</a><a href="tutorial.html" class="active">使用教程</a></nav>
+  <button class="icon-btn menu-btn" data-menu-toggle aria-label="目录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <button class="search-trigger" data-search-open>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>搜索文档…</span><kbd>Ctrl K</kbd>
+  </button>
+  <button class="icon-btn" data-theme-toggle aria-label="切换主题"><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg></button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar"><div class="side-title">本页目录</div><ul class="toc"><li class="lv2"><a href="#目录">目录</a></li><li class="lv2"><a href="#1-系统入口与登录">1. 系统入口与登录</a></li><li class="lv2"><a href="#2-explorer-图谱界面">2. Explorer 图谱界面</a></li><li class="lv2"><a href="#3-图谱导览12-步">3. 图谱导览（12 步）</a></li><li class="lv2"><a href="#4-搜索技巧与限制">4. 搜索技巧与限制</a></li><li class="lv2"><a href="#5-jupyterlab-抽取实验">5. JupyterLab 抽取实验</a></li><li class="lv3"><a href="#51-核心代码semantica_lab">5.1 核心代码：semantica_lab</a></li><li class="lv3"><a href="#52-命名空间实验名">5.2 命名空间（实验名）</a></li><li class="lv3"><a href="#53-用脚本跑">5.3 用脚本跑</a></li><li class="lv3"><a href="#54-换模型">5.4 换模型</a></li><li class="lv3"><a href="#55-常见报错">5.5 常见报错</a></li><li class="lv2"><a href="#6-agentscope合同专家">6. AgentScope「合同专家」</a></li><li class="lv2"><a href="#7-mcp-接入自己的客户端">7. MCP 接入自己的客户端</a></li><li class="lv2"><a href="#8-数据库接入automap">8. 数据库接入（automap）</a></li><li class="lv2"><a href="#9-注意事项不要做的事">9. 注意事项（不要做的事）</a></li><li class="lv2"><a href="#10-常见问题排查">10. 常见问题排查</a></li></ul><div class="side-card"><b>配套文档</b><a href="architecture.html">架构设计</a>：组件职责、数据流、设计决策。</div></aside>
+  <main class="content">
+
+<div class="doc-head">
+  <div class="eyebrow">Tutorial</div>
+  <h1>Semantica 使用教程</h1>
+  <p class="doc-sub">面向团队成员与接入开发者：界面怎么用、实验怎么做、智能体怎么问、MCP 怎么接。</p>
+  <div class="doc-meta">
+    <span><i></i>适用版本 2026-11-06</span>
+    <span>Explorer · JupyterLab · AgentScope</span>
+    <span>运维操作见部署与运维手册</span>
+  </div>
+</div><article class="prose"><blockquote><p>版本：2026-11-06（对应 MCP 修订号 6、精简档 16 工具、Neo4j 为主库） 面向团队成员与接入开发者。运维操作不在本文范围（见 <code>semantica/docs/08-运维手册.md</code>）。</p></blockquote>
+<h2 id="目录">目录</h2>
+<ol><li><a href="#1-系统入口与登录">系统入口与登录</a></li><li><a href="#2-explorer-图谱界面">Explorer 图谱界面</a></li><li><a href="#3-图谱导览12-步">图谱导览（12 步）</a></li><li><a href="#4-搜索技巧与限制">搜索技巧与限制</a></li><li><a href="#5-jupyterlab-抽取实验">JupyterLab 抽取实验</a></li><li><a href="#6-agentscope合同专家">AgentScope「合同专家」</a></li><li><a href="#7-mcp-接入自己的客户端">MCP 接入自己的客户端</a></li><li><a href="#8-数据库接入automap">数据库接入（automap）</a></li><li><a href="#9-注意事项不要做的事">注意事项（不要做的事）</a></li><li><a href="#10-常见问题排查">常见问题排查</a></li></ol>
+<h2 id="1-系统入口与登录">1. 系统入口与登录</h2>
+<div class="table-wrap"><table><thead><tr><th>入口</th><th>地址</th><th>用途</th></tr></thead><tbody><tr><td>Explorer（界面名「语义知识图谱」）</td><td>http://10.100.0.69:18835</td><td>看图、搜索、推理、查询共享知识图谱</td></tr><tr><td>JupyterLab（中文界面）</td><td>http://10.100.0.69:18836</td><td>写代码、跑抽取实验</td></tr><tr><td>AgentScope 控制台</td><td>http://10.100.0.69:18180</td><td>用自然语言向「合同专家」提问</td></tr><tr><td>MCP 端点（给程序用）</td><td>http://10.100.0.69:18835/mcp</td><td>智能体 / 外部程序经 MCP 协议访问图谱</td></tr></tbody></table></div>
+<ul><li>Explorer 与 JupyterLab 共用团队账号，用户名 <code>semantica</code>；密码不写在文档里，存放在服务器 <code>/mnt/llm/semantica/deploy/CREDENTIALS.txt</code>，向运维索取。</li><li>AgentScope 控制台是另一套账号，向 AgentScope 管理员索取。</li><li>换过密码后浏览器还在用旧的：关掉浏览器重新打开。</li><li>18830 端口是服务器上另一套旧部署，与本环境无关。</li><li>69 服务器上是真实湖仓合同数据（约 2.6 万实体）；阿里云环境是合成示例数据（华光集团合同库），两套数据不同。</li></ul>
+<h2 id="2-explorer-图谱界面">2. Explorer 图谱界面</h2>
+<p>左侧导航从上到下：<strong>总览、本体管理、知识存储、知识加工、知识治理、知识应用、决策因果</strong>。</p>
+<div class="table-wrap"><table><thead><tr><th>工作区 › 页签</th><th>用来做什么</th></tr></thead><tbody><tr><td>总览</td><td>首页：平台介绍、知识节点与关系规模等指标</td></tr><tr><td>本体管理</td><td>注册表、编辑器、版本、对齐、健康度、SHACL；右上角「实体搜索」「加载本体」</td></tr><tr><td>知识存储 › 图谱浏览</td><td>主战场，见下方详细说明</td></tr><tr><td>知识存储 › 记忆</td><td>团队记忆：导览、推理规则、查询示例（CQ-01…08 是针对湖仓合同的 Cypher 示例）、审核经验</td></tr><tr><td>知识存储 › 词表浏览</td><td>概念体系的上下位树：合同类型、行业分类、风险等级等</td></tr><tr><td>知识加工 › 导入导出</td><td>上传 JSON / CSV 进图（同 id 节点会被覆盖）；导出图谱快照</td></tr><tr><td>知识加工 › 对比合并</td><td>填两个节点 ID 逐字段对比，可合并</td></tr><tr><td>知识加工 › 实体解析</td><td>去重扫描，列出疑似重复的节点对</td></tr><tr><td>知识治理 › 溯源谱系</td><td>按编号追踪数据来源：代理、活动、实体三条泳道</td></tr><tr><td>知识治理 › 图谱概览</td><td>节点 / 关系总数、类型分布、连接最多的节点</td></tr><tr><td>知识应用 › 推理演练</td><td>填事实和 <code>IF … AND … THEN …</code> 规则，做正向推理</td></tr><tr><td>知识应用 › 查询</td><td>复杂查询（Neo4j 主库下按页面提供的查询方式）</td></tr><tr><td>决策因果</td><td>审批决策列表；选中一条看「因果链」（依据的制度、引用的先例）</td></tr></tbody></table></div>
+<p><strong>图谱浏览页</strong>（图超过 5,000 实体时）先显示「从一个实体开始浏览」：</p>
+<ol><li>搜索后选择实体，或点「常用入口」（连接最多的实体），画布上只画它的邻居；</li><li>选中实体后用画布左上角「展开邻居」「展开两层」往外扩，「清空画布」重来；</li><li>要看整张图点「加载全图」（较慢，几分钟），或在地址后加 <code>?full=1</code>；</li><li>全图画布：顶部搜索框；「全图 / 分组视图 / 聚焦」；「效果」「邻居」「时序」；「距离」里的热力图和中心视图；底部时间轴；</li><li>点节点打开检视面板：内容、操作（含「运行关系预测」）、路径追踪、候选关联、来源归属、属性（批注在「属性」的「批注」栏里）。</li></ol>
+<h2 id="3-图谱导览12-步">3. 图谱导览（12 步）</h2>
+<p>完整导览在「知识存储 › 记忆」的 DL-01…DL-12（针对阿里云示例库；69 已换真实湖仓数据，编号类操作同样适用）。核心操作一览：</p>
+<div class="table-wrap"><table><thead><tr><th>步</th><th>场景</th><th>操作</th><th>能看到</th></tr></thead><tbody><tr><td>1</td><td>图谱总览</td><td>搜一个项目实体（如示例库的「宙渚智慧校园三期项目」），「距离」→「中心视图」，中心深度拖到 2 跳</td><td>该项目两跳内的合同、付款、发票、单位和人员</td></tr><tr><td>2</td><td>节点详情</td><td>搜一份合同编号（如 HT-2022-0007），展开「属性」「来源归属」</td><td>金额、签订 / 到期日期、风险等级、批注、数据来自哪个系统</td></tr><tr><td>3</td><td>中心性与路径</td><td>「图谱概览」看连接最多的节点；选中合同，在「路径追踪」填一个地区编号，点「追踪因果路径」</td><td>合同经乙方单位（或所属项目）2 跳到达该地区</td></tr><tr><td>4</td><td>去重与合并</td><td>「实体解析」阈值 0.82 点「运行去重扫描」；「对比合并」填两个单位编号</td><td>疑似重复节点对；名称不同但统一社会信用代码相同的单位</td></tr><tr><td>5</td><td>关系预测</td><td>选中合同，检视面板「操作」下筛选候选类型，点「运行关系预测」</td><td>「候选关联」里给出缺失关系的候选（如合同名称含项目名却缺「属于项目」关系）</td></tr><tr><td>6</td><td>规则推理</td><td>打开记忆 TL-01，把「规则」「事实」粘贴进推理演练，点「运行推理」</td><td>推出满足规则的高风险合同清单</td></tr><tr><td>7</td><td>时序</td><td>底部时间轴竖线拖到某历史日期再拖回今天</td><td>顶部「…个活跃」随时间变化；合同变更的历史金额</td></tr><tr><td>8</td><td>审批决策与先例链</td><td>决策页点一条决策</td><td>「因果链」：依据的制度，沿「引用先例」追溯的先例链</td></tr><tr><td>9</td><td>数据溯源</td><td>「溯源谱系」填一个发票编号，点「追踪」</td><td>三条泳道：发票 ← 付款节点 ← 合同</td></tr><tr><td>10</td><td>本体与版本</td><td>本体管理「注册表」→「编辑器」→「版本」→「对齐」</td><td>类与属性、版本历史、待评审提议、与其他本体的对齐建议</td></tr><tr><td>11</td><td>词表浏览</td><td>「词表浏览」左侧下拉框选概念体系，点树里的概念</td><td>上下位层次（如「货物类合同」下有采购合同、销售合同、框架协议）</td></tr><tr><td>12</td><td>查询与记忆</td><td>打开记忆里的查询示例（CQ 系列），复制进查询页运行</td><td>查询结果（如逾期付款节点和计划日期）</td></tr></tbody></table></div>
+<h2 id="4-搜索技巧与限制">4. 搜索技巧与限制</h2>
+<ul><li>搜具体名称或编号最准：公司名、<code>HT-2024-0001</code>（编号精确命中）、<code>HT-2024</code>（编号前缀）。</li><li>搜索词和某个标签完全相同（如「合同」「杭州市」）时，只返回那个完全相同的节点。</li><li>中文按子串匹配：建议最多显示 6 条、结果 8 条，只在按 id 排序后最先匹配到的 200 个节点里挑（最多扫 12000 个）；常见词会被编号靠前的节点占满。</li><li><strong>路径追踪是有向的</strong>：从合同出发能找到单位、项目、地区、人员，反过来找不到。</li><li>「…个活跃」少于节点总数：时间轴默认停在今天，不在有效期内的节点被隐藏。</li><li>全图第一次加载并稳定 8000+ 节点：无 GPU 的机器约 60 秒，有显卡快得多。</li><li>「加载本体 › 地址导入」不能用内网地址（服务器上不了外网），请用「文件上传」或粘贴内容。</li><li>图谱刚被导入 / 推理写回后，统计类结果可能滞后几秒，稍后再查。</li></ul>
+<h2 id="5-jupyterlab-抽取实验">5. JupyterLab 抽取实验</h2>
+<p>全团队共用同一个 JupyterLab 和 <code>/workspace</code>（每人建议一个目录，如 <code>/workspace/&lt;姓名&gt;/</code>）。<code>examples/</code> 里有两个示例 notebook：<code>01_文档抽取</code>（3 份合同 txt / docx / pdf → 大模型抽取 → 推图，42 秒）和 <code>02_数据库抽取</code>（SQLite 演示库 → <code>DBIngestor</code> → 行变节点、外键变边，31 秒）。</p>
+<h3 id="51-核心代码semantica_lab">5.1 核心代码：semantica_lab</h3>
+<div class="code-block"><pre><code class="language-python">import semantica_lab as lab
+
+text = lab.read_text(&quot;/workspace/examples/data/采购合同.docx&quot;)      # 支持 txt/md/docx/pdf/html/xlsx
+result = lab.extract(text, entity_types=[&quot;单位&quot;, &quot;人员&quot;, &quot;金额&quot;])   # 大模型抽实体和关系
+payload = lab.payload_from_extraction(result, experiment=&quot;张三-合同抽取&quot;)
+print(lab.push(payload))   # {'nodes_imported': …, 'edges_imported': …}
+print(lab.stats())         # 当前节点数、边数</code></pre></div>
+<ul><li>大模型和 Explorer 的地址、Key 已在容器环境变量里配好，<strong>代码里不写密钥</strong>。</li><li>数据库表或自己组装的图：用 <code>lab.payload_from_graph(graph, experiment)</code>。</li><li>长文本自动分段（默认约 2048 字一段），输出装不下时自动对半拆开重试；<code>extract(..., segment_chars=3000)</code> 可自定。</li><li>单次 <code>push</code> 不超过 50 MB，超了分批。</li></ul>
+<h3 id="52-命名空间实验名">5.2 命名空间（实验名）</h3>
+<ul><li><code>push</code> 必须带实验名，建议「姓名-主题」（最长 64 字符，不能含 <code>/ \ &quot;</code> 和换行）。</li><li>节点 id 自动加「实验名/」前缀：同一实验重复推送不翻倍，不同实验的同名实体互不覆盖。</li><li><strong>推进去的节点删不掉</strong>（上游没有删除接口）：先用小样本试，确认后再推全量。</li></ul>
+<h3 id="53-用脚本跑">5.3 用脚本跑</h3>
+<p>把 <code>.py</code> 放进 <code>/workspace</code>（JupyterLab 上传，或 SFTP 到服务器数据目录），然后：</p>
+<div class="code-block"><pre><code class="language-bash">docker exec semantica-lab python /workspace/xxx.py   # 有服务器账号（easter）
+python /workspace/xxx.py                             # 没有账号：JupyterLab「文件 → 新建 → 终端」</code></pre></div>
+<p>容器里访问 Explorer 用 <code>http://semantica-explorer:8000</code>（默认值），不要用 18835（那是给浏览器的，要登录）。从自己电脑调接口：<code>curl -u semantica:&lt;密码&gt; http://10.100.0.69:18835/api/graph/stats</code>。</p>
+<h3 id="54-换模型">5.4 换模型</h3>
+<p>大模型网关默认 GLM-5.3，备选 Qwen3.8-27B：</p>
+<div class="code-block"><pre><code class="language-python">result = lab.extract(text, model=&quot;Qwen3.8-27B&quot;)                 # 只换这一次
+
+import dataclasses
+settings = dataclasses.replace(lab.llm_settings(), llm_model=&quot;Qwen3.8-27B&quot;)
+result = lab.extract(text, settings=settings)                    # 本 notebook 统一用
+
+# 需要更细的抽取时：打开思考并放大额度（每份多等一两分钟）
+settings = dataclasses.replace(lab.llm_settings(), llm_disable_thinking=False, llm_max_tokens=32768)</code></pre></div>
+<h3 id="55-常见报错">5.5 常见报错</h3>
+<div class="table-wrap"><table><thead><tr><th>报错开头</th><th>处理</th></tr></thead><tbody><tr><td>大模型返回了空内容 / 输出被截断</td><td>保持关闭思考；调大 <code>llm_max_tokens</code> 或调小 <code>segment_chars</code></td></tr><tr><td>调用大模型超时 / 网关出错 / 网关限流</td><td>网关忙：稍后重试，少开并发，<code>segment_chars=1000</code></td></tr><tr><td>…要求网关登录（HTTP 401）</td><td>地址用了 18835，改回 <code>http://semantica-explorer:8000</code></td></tr><tr><td>导入数据超过 50 MB 上限</td><td>分批 <code>push</code></td></tr><tr><td>…没有文字层，可能是扫描件</td><td>先做 OCR</td></tr></tbody></table></div>
+<h2 id="6-agentscope合同专家">6. AgentScope「合同专家」</h2>
+<p>合同专家（GLM-5.3）通过 MCP 使用 Semantica 的 16 个工具：检索、实体与关系、统计、复杂查询、有效期、审批先例与决策、数据来源、团队记忆、本体、文本抽取、文档存取、数据库接入；也能写图谱。</p>
+<p><strong>使用步骤</strong>：</p>
+<ol><li>打开 http://10.100.0.69:18180 登录，进入 <strong>Chat</strong> 页（不要用 Sessions 页的 New session 表单，那是上游缺陷会报 400）。</li><li>选「合同专家」，新建对话，直接用中文提问。</li><li>回答先给结论，再列依据（实体编号、关键数值）；每次工具调用都记在会话事件里。</li></ol>
+<p><strong>示例问法</strong>：</p>
+<div class="table-wrap"><table><thead><tr><th>问法</th><th>它通常用的工具</th></tr></thead><tbody><tr><td>有哪些实体类型？合同有多少份？</td><td>graph_schema、entity_stats</td></tr><tr><td>某单位（给编号 DW-0001）作为甲方的合同有多少份？按风险等级如何分布？</td><td>entity_stats</td></tr><tr><td>HT-2022-0001 和 DW-0001 是什么关系？</td><td>query_graph（mode=neighbors）</td></tr><tr><td>状态为已完成、且风险等级为高的合同有几份？</td><td>entity_stats</td></tr><tr><td>与「工程施工合同 金额超过一千万 乙方资信 B 级」相似的历史审批先例有哪些？</td><td>decisions</td></tr><tr><td>2025-06-30 仍然有效的合同有多少份？</td><td>entity_stats（valid_at）</td></tr><tr><td>HT-2022-0015 的数据从哪来、谁改过？</td><td>query_graph（provenance）</td></tr><tr><td>审核高风险合同要注意什么？</td><td>search_memories</td></tr></tbody></table></div>
+<p>一个问题一般 10–60 秒，多数时间是大模型在想。</p>
+<p><strong>提问技巧与限制</strong>：</p>
+<ul><li><strong>给编号最准</strong>（<code>HT-2024-0001</code>、<code>DW-0001</code>）；只给名称时它会先换编号。</li><li>想要可核对的结果就让它「列出编号」，关键结论按编号到 Explorer 再看一眼。</li><li>关系有方向：「某单位作为甲方的合同」和「某单位签的合同」可能不一样，问清角色。</li><li>所有人共用每分钟 120 次工具调用额度；它说「调用太频繁」时等几秒再问。</li><li><strong>写入直接生效</strong>：新增实体和关系、改属性、归档（删除即归档，可恢复）、登记审批决策。它写之前会先查编号、只用已有类型和方向、不覆盖已有实体；但<strong>关系写进去不能删除</strong>。让它写之前把内容说清楚，写完让它回读核对。</li><li>图谱刚被改过时结果可能滞后几秒，稍后再问。</li><li>它说「Semantica 暂时不可用」或「MCP 服务已被管理员暂时关闭」时，是服务在重启或被运维临时关掉，过会儿在同一对话再问；一直这样找运维。</li></ul>
+<h2 id="7-mcp-接入自己的客户端">7. MCP 接入自己的客户端</h2>
+<p>任何支持 Streamable HTTP 的 MCP 客户端都能接：地址 <code>http://10.100.0.69:18835/mcp</code>，鉴权 <code>Authorization: Bearer &lt;令牌&gt;</code>。</p>
+<p><strong>接入流程</strong>：</p>
+<ol><li>找运维建客户端并领取令牌：<code>scripts/mcp-client.sh add &lt;客户端id&gt; editor &quot;&lt;显示名&gt;&quot; --profile compact</code>（不要借用别人的令牌）。</li><li>按 MCP Streamable HTTP 无状态子集调用：只 POST、只收 JSON、GET 得 405 属正常、不支持批量；协商版本 2025-06-18。</li><li>令牌只从文件读，不要写进命令行（<code>ps</code> 能看到）或代码仓库。</li></ol>
+<p><strong>Python 最小示例</strong>（python3 标准库）：</p>
+<div class="code-block"><pre><code class="language-python">import json, urllib.request
+
+URL = &quot;http://10.100.0.69:18835/mcp&quot;
+TOKEN = open(&quot;&lt;令牌文件路径&gt;&quot;, encoding=&quot;utf-8&quot;).read().strip()
+HEADERS = {&quot;Content-Type&quot;: &quot;application/json&quot;, &quot;Accept&quot;: &quot;application/json, text/event-stream&quot;,
+           &quot;MCP-Protocol-Version&quot;: &quot;2025-06-18&quot;, &quot;Authorization&quot;: &quot;Bearer &quot; + TOKEN}
+
+def rpc(method, params=None, id_=1):
+    body = {&quot;jsonrpc&quot;: &quot;2.0&quot;, &quot;method&quot;: method, &quot;params&quot;: params or {}}
+    if id_ is not None:
+        body[&quot;id&quot;] = id_
+    req = urllib.request.Request(URL, data=json.dumps(body).encode(&quot;utf-8&quot;),
+                                 headers=HEADERS, method=&quot;POST&quot;)
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        raw = resp.read()
+        return resp.status, (json.loads(raw) if raw else None)
+
+status, init = rpc(&quot;initialize&quot;, {&quot;protocolVersion&quot;: &quot;2025-06-18&quot;, &quot;capabilities&quot;: {},
+                                  &quot;clientInfo&quot;: {&quot;name&quot;: &quot;my-client&quot;, &quot;version&quot;: &quot;1&quot;}})
+print(status, init[&quot;result&quot;][&quot;serverInfo&quot;])
+rpc(&quot;notifications/initialized&quot;, id_=None)          # 通知：202
+tools = rpc(&quot;tools/list&quot;, id_=2)[1][&quot;result&quot;][&quot;tools&quot;]
+print(len(tools), [t[&quot;name&quot;] for t in tools])
+result = rpc(&quot;tools/call&quot;, {&quot;name&quot;: &quot;entity_stats&quot;,
+                            &quot;arguments&quot;: {&quot;node_type&quot;: &quot;合同&quot;, &quot;group_by&quot;: &quot;风险等级&quot;},
+                            &quot;_meta&quot;: {&quot;io.agentscope/toolCallId&quot;: &quot;my-call-1&quot;}}, id_=3)[1][&quot;result&quot;]
+print(result[&quot;isError&quot;], result[&quot;content&quot;][0][&quot;text&quot;][:300])</code></pre></div>
+<p><strong>现行工具目录（精简档 16 个：读 11、写 5）</strong>：</p>
+<div class="table-wrap"><table><thead><tr><th>工具</th><th>用法要点</th><th>读写</th></tr></thead><tbody><tr><td><code>graph_schema</code></td><td>图谱概况 / 某类型属性和关系 / 本体 / 术语 / 变更提案（<code>view</code> 切换）；<strong>写查询前先调它</strong></td><td>读</td></tr><tr><td><code>find_entities</code></td><td><code>query</code> 关键词检索；<code>names</code> 名称换编号（1–20 个）；<code>text</code> 从文字里找已有实体。三选一</td><td>读</td></tr><tr><td><code>query_graph</code></td><td><code>node_id</code> 必填；<code>mode=node</code> / <code>neighbors</code>（1–5 跳）；<code>provenance</code> 附数据来源</td><td>读</td></tr><tr><td><code>entity_stats</code></td><td><code>mode=aggregate</code> 计数 / 分组 / 求和；<code>valid_at</code> 某日有效；<code>changes</code> 期间生效或失效</td><td>读</td></tr><tr><td><code>cypher_query</code></td><td>只读复杂查询（Neo4j 主库；Explorer 后端时为 <code>sparql_query</code>）</td><td>读</td></tr><tr><td><code>graph_insight</code></td><td><code>kind=analytics</code> / <code>quality</code> / <code>export</code></td><td>读</td></tr><tr><td><code>decisions</code></td><td>按情形找相似决策 / 按条件筛选；给 <code>decision_id</code> 看影响链（<code>trace</code>）</td><td>读</td></tr><tr><td><code>reasoning</code></td><td><code>mode=forward</code>（事实+规则）/ <code>abductive</code>（反推假设）</td><td>读</td></tr><tr><td><code>extract</code></td><td><code>text</code> 抽实体和关系（<code>scope=all/entities/relations</code>）</td><td>读</td></tr><tr><td><code>retrieve_context</code></td><td>按问题检索已存文档的相关段落</td><td>读</td></tr><tr><td><code>search_memories</code></td><td>检索团队记忆（审核经验、查询示例、推理规则）</td><td>读</td></tr><tr><td><code>write_decision</code></td><td>登记审批决策；可关联两条已有决策（先例关系）</td><td>写</td></tr><tr><td><code>manage_document</code></td><td><code>action=store</code> / <code>update</code> / <code>remove</code> 文档库</td><td>写</td></tr><tr><td><code>write_entity</code></td><td><code>action=add</code> / <code>update</code> / <code>archive</code> / <code>restore</code> 实体</td><td>写</td></tr><tr><td><code>add_relationship</code></td><td>新增关系（<strong>写进去不能删除</strong>）</td><td>写</td></tr><tr><td><code>database_onboarding</code></td><td>数据库接入：<code>status</code> / <code>start</code>（dryrun 默认，push 要 <code>confirm=true</code>；可 <code>resume_job_id</code> 续跑、带 <code>review_edits</code>）/ <code>cancel</code></td><td>写</td></tr></tbody></table></div>
+<p><strong>调用约定</strong>：</p>
+<ul><li>AgentScope 里模型看到的工具名带前缀 <code>semantica__&lt;工具名&gt;</code>；Agent 定义里写不带前缀的名字。</li><li>参数先由客户端按 inputSchema 严格校验（类型、枚举、多余的键都会被拒），对象里的过滤值<strong>一律写成字符串</strong>（数字也加引号）。</li><li>结果是紧凑 JSON（键英文、值中文），列表统一 <code>items</code> / <code>total</code> / <code>next_cursor</code>；超长带 <code>truncated: true</code> 和 <code>hint</code>；没有结果不算错误（<code>total: 0</code> + 改写建议）。</li><li>业务失败：<code>isError: true</code>，正文是中文的可操作说明；未知工具：JSON-RPC -32602。</li><li>浏览器页面不能直接调（<code>Origin</code> 检查）；每客户端每分钟 120 次；单次结果 2 万字符截断。</li></ul>
+<p><strong>AgentScope 里再建一个智能体</strong>：推荐独立客户端做法——<code>mcp-client.sh add &lt;id&gt; editor &quot;&lt;名称&gt;&quot; --profile compact</code> 生成新令牌，在 Agent 所在命名空间建 Vault 和 <code>static_bearer</code> 凭据（target <code>semantica</code>），新 Agent 的 <code>defaultVaultIds</code> 指向它；<code>mcp_toolset</code> 里 16 个工具全部 <code>enabled: true</code> 且权限 <code>always_allow</code>（不写会默认 <code>always_ask</code>，Chat 页没有审批界面会挂死）。可运行参考：<code>deploy/integrations/agentscope/setup_agentscope.py</code> 和模板 <code>agent-compact.json</code>。改了定义要<strong>新建会话</strong>才生效。</p>
+<h2 id="8-数据库接入automap">8. 数据库接入（automap）</h2>
+<p>把关系数据库（MySQL / PostgreSQL 等）的表变成图谱：表 → 类、列 → 属性、外键 → 关系。流程：<strong>发起 → 演练（dryrun）→ 审核意见 → 续跑至通过 → 导入（push）</strong>。</p>
+<p>智能体（合同专家）可以直接走完全流程，也可以用 MCP 的 <code>database_onboarding</code> 工具：</p>
+<div class="table-wrap"><table><thead><tr><th>用法</th><th>做什么</th></tr></thead><tbody><tr><td><code>action=start</code>，给 <code>source</code>、<code>dataset</code>、<code>id_prefix</code></td><td>发起接入作业；默认 <code>mode=dryrun</code> 只演练</td></tr><tr><td><code>action=status</code>（可给 <code>job_id</code>）</td><td>看进度和结果；演练没通过时 <code>dry_run.failed_checks</code> 带每项检查明细，<code>next</code> 给出续跑写法</td></tr><tr><td><code>action=start, resume_job_id=&lt;id&gt;</code></td><td>在原作业目录续跑：快照、画像、共识等沿用，只重做受影响的步骤（湖仓合同从头约 1 小时，续跑 15–25 秒）</td></tr><tr><td><code>review_edits</code>（随 start，只用于演练）</td><td>审核意见数组（每条必须有 <code>reason</code>；常用 <code>table</code> / <code>column</code> / <code>value</code> / <code>fk</code>），最多 50 条</td></tr><tr><td><code>action=start, mode=push, confirm=true</code></td><td>真正导入（导入时不能再带审核意见）</td></tr><tr><td><code>action=cancel, job_id=&lt;id&gt;</code></td><td>取消（导入那一步不能取消）</td></tr></tbody></table></div>
+<p>69 的真实湖仓合同（25,690 实体 / 56,123 关系）就是经这条链路导入的。</p>
+<h2 id="9-注意事项不要做的事">9. 注意事项（不要做的事）</h2>
+<ul><li><strong>不要删改数据目录</strong>；<code>/workspace</code> 里只动自己的文件，不改别人的目录和 <code>examples/</code> 原件。</li><li><strong>重置图谱会清空全团队</strong>的图、批注、本体工作区、记忆和溯源：要重置先在团队说好，由运维执行。</li><li>不要随手点会改共享数据的按钮：「对比合并」的「确认合并」、「导入导出」的「上传到图谱」、本体管理的「从注册表移除」「删除对齐」「批准」「发布」。</li><li><strong>推理演练的「将推理结果写入图谱」默认打开</strong>：结论会作为关系写进共享图且删不掉；只想看结果先关掉开关。</li><li>不要在 notebook 和脚本里写密钥或数据库密码（用环境变量）。</li><li>用完关闭 JupyterLab 内核：lab 容器 16 GB 内存 / 16 核，全员共用。</li><li>MCP 令牌不要写进命令行、代码或仓库；不要借用其他客户端的令牌。</li></ul>
+<h2 id="10-常见问题排查">10. 常见问题排查</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>原因与处理</th></tr></thead><tbody><tr><td>打不开 18835，弹中文 502 页</td><td>后端重启中，页面每 15 秒自动刷新，等一会</td></tr><tr><td>登录后仍反复要求登录</td><td>换过密码，关掉浏览器重开</td></tr><tr><td>搜索没有结果</td><td>不代表不存在：换更短的词或同义词、去掉部分条件；数值 / 日期比较改用统计或查询</td></tr><tr><td>路径追踪找不到</td><td>路径有方向，反过来试试</td></tr><tr><td>智能体说「调用太频繁」</td><td>共额度每分钟 120 次，等几秒再问</td></tr><tr><td>智能体说「Semantica 暂时不可用」/「MCP 服务已被关闭」</td><td>服务重启或运维临时关停，过会儿再问；持续出现找运维</td></tr><tr><td>智能体回答的数字和界面不一致</td><td>图谱刚被改过结果有滞后；或两台服务器数据不同（69 真实 / 阿里云合成），确认连的哪台</td></tr><tr><td>2026-11-03 前开的对话下一轮报 401</td><td>客户端已更换，新建 Chat 即可</td></tr><tr><td>MCP 调用报 405</td><td>发了 GET：本服务只收 POST，属预期行为</td></tr><tr><td>MCP 调用报 413 / 429</td><td>请求体超 1 MB / 限流（20 r/s），拆小或降低频率</td></tr></tbody></table></div>
+<hr>
+<ul><li>配套文档：<a href="architecture.html">Semantica架构设计.md</a></li><li>原始文档：<code>semantica/docs/</code>（00–12 系列，其中 07-使用指南、10-智能体接入（MCP）、11-数据库接入（CLM）是本文主要来源）</li></ul></article>
+<nav class="pager"><a href="architecture.html"><div class="dir">上一篇</div><div class="name">架构设计</div></a></nav>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <span>Semantica 语义知识图谱 · 文档中心</span>
+  <span>分支 semantica-system · 更新于 2026-11-06</span>
+</footer>
+
+<div class="search-overlay">
+  <div class="search-panel">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="text" placeholder="搜索章节、工具、命令…" autocomplete="off" spellcheck="false">
+      <span class="esc">ESC</span>
+    </div>
+    <div class="search-results"></div>
+    <div class="search-hint">输入关键词开始检索，↑↓ 选择，Enter 跳转</div>
+  </div>
+</div>
+
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>
