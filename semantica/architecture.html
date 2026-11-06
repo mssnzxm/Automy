@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>架构设计 · Semantica 文档中心</title>
+<meta name="description" content="Semantica 总体架构、组件职责、数据流与关键设计决策。">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<div class="progress"></div>
+<header class="topbar">
+  <a class="brand" href="index.html">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#04171a" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5.5" r="2.2"/><circle cx="5.5" cy="16.5" r="2.2"/><circle cx="18.5" cy="16.5" r="2.2"/><path d="M10.7 7.4 6.9 14.6M13.3 7.4l3.8 7.2M7.7 16.5h8.6"/></svg></span>
+    <span>Semantica</span>
+    <span class="brand-sub">文档中心</span>
+  </a>
+  <nav class="topnav"><a href="index.html">概览</a><a href="architecture.html" class="active">架构设计</a><a href="tutorial.html">使用教程</a></nav>
+  <button class="icon-btn menu-btn" data-menu-toggle aria-label="目录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <button class="search-trigger" data-search-open>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>搜索文档…</span><kbd>Ctrl K</kbd>
+  </button>
+  <button class="icon-btn" data-theme-toggle aria-label="切换主题"><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg></button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar"><div class="side-title">本页目录</div><ul class="toc"><li class="lv2"><a href="#1-系统概述">1. 系统概述</a></li><li class="lv2"><a href="#2-总体架构">2. 总体架构</a></li><li class="lv2"><a href="#3-组件详解">3. 组件详解</a></li><li class="lv3"><a href="#31-网关-semantica-gateway">3.1 网关 semantica-gateway</a></li><li class="lv3"><a href="#32-semantica-explorer界面-主-api">3.2 semantica-explorer（界面 + 主 API）</a></li><li class="lv3"><a href="#33-semantica-labjupyterlab">3.3 semantica-lab（JupyterLab）</a></li><li class="lv3"><a href="#34-semantica-mcpmcp-侧车">3.4 semantica-mcp（MCP 侧车）</a></li><li class="lv3"><a href="#35-semantica-neo4j图数据库主库">3.5 semantica-neo4j（图数据库主库）</a></li><li class="lv3"><a href="#36-agentscope合同专家智能体">3.6 AgentScope（合同专家智能体）</a></li><li class="lv3"><a href="#37-数据接入automap-clm">3.7 数据接入（automap / CLM）</a></li><li class="lv2"><a href="#4-技术栈">4. 技术栈</a></li><li class="lv2"><a href="#5-数据架构与数据流">5. 数据架构与数据流</a></li><li class="lv2"><a href="#6-关键设计决策摘要">6. 关键设计决策摘要</a></li><li class="lv2"><a href="#7-已知限制与演进路线">7. 已知限制与演进路线</a></li><li class="lv2"><a href="#8-相关文档索引">8. 相关文档索引</a></li></ul><div class="side-card"><b>配套文档</b><a href="tutorial.html">使用教程</a>：界面操作、智能体提问、MCP 接入。</div></aside>
+  <main class="content">
+
+<div class="doc-head">
+  <div class="eyebrow">Architecture</div>
+  <h1>Semantica 架构设计</h1>
+  <p class="doc-sub">从浏览器到 Neo4j：系统由哪些组件构成、数据怎样流动、关键取舍为什么这样定。</p>
+  <div class="doc-meta">
+    <span><i></i>分支 semantica-system</span>
+    <span>MCP 修订号 6 · 精简档 16 工具</span>
+    <span>两台服务器均已切换 Neo4j 主库</span>
+  </div>
+</div><article class="prose"><blockquote><p>版本：2026-11-06（对应代码分支 <code>semantica-system</code>，MCP 修订号 6，两台服务器均已切换 Neo4j 为主库） 依据：<code>semantica/docs/</code> 00–12 系列文档整理。细节以原文档为准，本文是面向开发与架构评审的综合说明。</p></blockquote>
+<h2 id="1-系统概述">1. 系统概述</h2>
+<p>Semantica 是一套<strong>团队级语义知识图谱系统</strong>，围绕一张共享的知识图谱，为三类使用者提供服务：</p>
+<div class="table-wrap"><table><thead><tr><th>使用者</th><th>途径</th><th>做什么</th></tr></thead><tbody><tr><td>团队成员（人）</td><td>浏览器 → Explorer 界面</td><td>浏览图谱、搜索、推理、SPARQL/Cypher 查询、本体管理、决策因果分析</td></tr><tr><td>数据工程师</td><td>JupyterLab（lab 容器）</td><td>写 Python 做文档抽取、数据库接入实验，把结果推入图谱</td></tr><tr><td>智能体 / 外部程序</td><td>MCP 协议（<code>/mcp</code> 端点）</td><td>用 16 个工具检索、统计、写入图谱，走完数据库接入全流程</td></tr></tbody></table></div>
+<p>核心设计原则：</p>
+<ul><li><strong>不改上游源码</strong>：上游 Semantica 0.7.0（提交 52f34f0，MIT 协议）的 <code>src/</code> 保持原样，所有定制以&quot;启动包装、构建期补丁、独立侧车&quot;三种形式叠加，方便升级。</li><li><strong>图谱放在硬盘上的 Neo4j</strong>（2026-11-03 起）：摆脱&quot;整张图在 Explorer 进程内存里&quot;的规模与持久化限制；Explorer 界面变为定期刷新的只读副本。</li><li><strong>智能体只能经 MCP 侧车进入</strong>：独立的 Bearer 令牌域、限流、审计、可一键停用，与人的 Basic Auth 凭据完全隔离。</li></ul>
+<h2 id="2-总体架构">2. 总体架构</h2>
+<figure class="arch-figure"><svg viewBox="0 0 1040 600" xmlns="http://www.w3.org/2000/svg" class="arch-svg" role="img" aria-label="Semantica 总体架构：网关、三个服务、Neo4j 与数据根">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line-strong)"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- 使用者 -->
+  <text x="40" y="14" class="d-note" letter-spacing="1.4">使用者 / 调用方</text>
+
+  <rect x="40" y="24" width="280" height="62" rx="13" class="d-box"/>
+  <text x="180" y="52" text-anchor="middle" class="d-label">浏览器</text>
+  <text x="180" y="72" text-anchor="middle" class="d-sub">团队成员 · Basic Auth</text>
+
+  <rect x="380" y="24" width="280" height="62" rx="13" class="d-box--violet d-box"/>
+  <text x="520" y="52" text-anchor="middle" class="d-label">AgentScope 智能体</text>
+  <text x="520" y="72" text-anchor="middle" class="d-sub">Bearer 令牌 · /mcp</text>
+
+  <rect x="720" y="24" width="280" height="62" rx="13" class="d-box"/>
+  <text x="860" y="52" text-anchor="middle" class="d-label">JupyterLab 用户</text>
+  <text x="860" y="72" text-anchor="middle" class="d-sub">抽取实验 · Python</text>
+
+  <!-- 连线：使用者 → 网关 -->
+  <line x1="180" y1="86" x2="180" y2="128" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="520" y1="86" x2="520" y2="128" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="860" y1="86" x2="860" y2="128" class="d-line" marker-end="url(#arrow)"/>
+
+  <!-- 网关 -->
+  <rect x="40" y="132" width="960" height="96" rx="14" class="d-box--accent d-box"/>
+  <text x="64" y="164" class="d-label">semantica-gateway · nginx:alpine</text>
+  <text x="64" y="188" class="d-sub">:18835 → Explorer 与 /mcp　·　:18836 → Lab　·　到后端只保留内网访问</text>
+  <text x="64" y="210" class="d-note">页面代加 X-API-Key；/mcp 转发 Bearer 并清除 X-API-Key；限流 20 r/s</text>
+
+  <rect x="852" y="150" width="124" height="26" rx="7" fill="var(--accent-soft)" stroke="none"/>
+  <text x="914" y="168" text-anchor="middle" class="d-sub" fill="var(--accent)">统一入口</text>
+
+  <!-- 连线：网关 → 服务 -->
+  <line x1="185" y1="228" x2="185" y2="278" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="520" y1="228" x2="520" y2="278" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="855" y1="228" x2="855" y2="278" class="d-line" marker-end="url(#arrow)"/>
+
+  <!-- 服务 -->
+  <rect x="40" y="282" width="290" height="108" rx="13" class="d-box"/>
+  <text x="185" y="312" text-anchor="middle" class="d-label">semantica-explorer</text>
+  <text x="185" y="333" text-anchor="middle" class="d-sub">FastAPI :8000 · 界面 + 主 API</text>
+  <text x="185" y="353" text-anchor="middle" class="d-note">上游源码不改 · 启动包装持久化</text>
+  <text x="185" y="373" text-anchor="middle" class="d-note">Neo4j 主库时为只读副本</text>
+
+  <rect x="375" y="282" width="290" height="108" rx="13" class="d-box--accent d-box"/>
+  <text x="520" y="312" text-anchor="middle" class="d-label">semantica-mcp</text>
+  <text x="520" y="333" text-anchor="middle" class="d-sub">uvicorn :8001 · 16 个工具</text>
+  <text x="520" y="353" text-anchor="middle" class="d-note">协议适配 · 鉴权 · 限流 · 审计</text>
+  <text x="520" y="373" text-anchor="middle" class="d-note">只读根文件系统 · 不挂数据目录</text>
+
+  <rect x="710" y="282" width="290" height="108" rx="13" class="d-box"/>
+  <text x="855" y="312" text-anchor="middle" class="d-label">semantica-lab</text>
+  <text x="855" y="333" text-anchor="middle" class="d-sub">JupyterLab :8888 · 中文界面</text>
+  <text x="855" y="353" text-anchor="middle" class="d-note">semantica_lab 抽取流水线</text>
+  <text x="855" y="373" text-anchor="middle" class="d-note">直连 explorer:8000</text>
+
+  <!-- 连线：服务 → 存储 -->
+  <line x1="185" y1="390" x2="185" y2="442" class="d-line" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="199" y="421" class="d-note">副本刷新（约 6 秒）</text>
+
+  <line x1="470" y1="390" x2="330" y2="442" class="d-line" marker-end="url(#arrow)"/>
+  <text x="486" y="414" class="d-note">Bolt 直查</text>
+
+  <!-- 存储 -->
+  <rect x="40" y="446" width="470" height="112" rx="13" class="d-box--violet d-box"/>
+  <text x="275" y="476" text-anchor="middle" class="d-label">semantica-neo4j</text>
+  <text x="275" y="497" text-anchor="middle" class="d-sub">Neo4j 2025.03 社区版 · :7687</text>
+  <text x="275" y="518" text-anchor="middle" class="d-note">(:Entity:类型) / -[:关系名]-&gt; / (:SemanticaMeta)</text>
+  <text x="275" y="538" text-anchor="middle" class="d-note">GraphMeta.system_of_record = neo4j（主库）</text>
+
+  <rect x="540" y="446" width="460" height="112" rx="13" class="d-box"/>
+  <text x="770" y="476" text-anchor="middle" class="d-label">数据根 /mnt/llm/semantica-data</text>
+  <text x="770" y="497" text-anchor="middle" class="d-sub">explorer/ · workspace/ · mcp/</text>
+  <text x="770" y="518" text-anchor="middle" class="d-note">graph.json · state.json · provenance.db</text>
+  <text x="770" y="538" text-anchor="middle" class="d-note">快照每小时一份 · 密钥不进仓库</text>
+
+  <!-- 图例 -->
+  <line x1="40" y1="582" x2="76" y2="582" class="d-line"/>
+  <text x="84" y="586" class="d-note">请求链路</text>
+  <line x1="170" y1="582" x2="206" y2="582" class="d-line d-line--dash"/>
+  <text x="214" y="586" class="d-note">可选 / 备选后端</text>
+</svg>
+</figure><details class="ascii-diagram"><summary>展开原始文本拓扑图</summary><div class="code-block"><pre><code>   浏览器（内网 10.100.0.x）                 AgentScope data 容器（MCP 客户端）
+   :18835 │                │ :18836          │ :18835/mcp，Authorization: Bearer &lt;令牌&gt;
+          ▼                ▼                 ▼
+┌ semantica-gateway（nginx:alpine）
+│   :80  → semantica-explorer:8000    Basic Auth；代加 X-API-Key；/ws 升级；/api/health 免登录
+│   :80  location = /mcp → semantica-mcp:8001   不走 Basic；限流 20 r/s；请求体 ≤ 1 MB；清掉 X-API-Key
+│   :81  → semantica-lab:8888          内核 WebSocket；上传上限 1 GB
+│
+├ semantica-explorer（semantica-explorer:0.7.0-52f34f0）
+│   python -m explorer_persistent → 上游 create_app()（FastAPI / uvicorn :8000）
+│   /data                  ← &lt;数据根&gt;/explorer（graph.json、state.json、provenance.db、snapshots/）
+│   /app/semantica/static  ← offline/static（只读，已汉化的前端）
+│   Neo4j 为主库时：SEMANTICA_READ_ONLY=1，写接口 403，由 replica-refresh.sh 从 Neo4j 刷新
+│
+├ semantica-lab（profile：lab）
+│   JupyterLab 4.6.4（zh_CN）+ 辅助模块 semantica_lab
+│   /workspace ← &lt;数据根&gt;/workspace；直连 explorer:8000（带 X-API-Key）和大模型网关
+│
+├ semantica-mcp（0.7.0-52f34f0-mcp6，智能体接入）
+│   python -m semantica_mcpd（uvicorn :8001）；只读根文件系统，不挂数据目录
+│   /etc/semantica-mcp ← &lt;数据根&gt;/mcp（只读：clients.json、tools.override.json、disabled 开关）
+│   ├─► bolt://semantica-neo4j:7687      Neo4j 后端（现行，主库）
+│   └─► http://semantica-explorer:8000   Explorer 后端（REST + WS，作为备选后端保留）
+│
+└ semantica-neo4j（独立 compose 项目 deploy/neo4j/）
+    Neo4j 2025.03.0 社区版；宿主端口 17474/17687 只监听 127.0.0.1
+    GraphMeta.system_of_record = neo4j（主库标记）</code></pre></div></details>
+<ul><li>compose 项目 <code>semantica-lab</code>，Docker 网络 <code>semantica-lab-net</code>（10.8.61.0/24）；<code>semantica-neo4j</code> 是独立 compose 项目，加入同一网络。</li><li>对外只发布 <strong>18835</strong>（Explorer + <code>/mcp</code>）和 <strong>18836</strong>（JupyterLab）两个端口；其余机器只能经网关访问。</li><li>两台部署：<strong>69 服务器</strong>（<code>/mnt/llm/semantica</code>，真实湖仓合同数据，25,690 实体 / 56,123 关系）与<strong>阿里云</strong>（合成示例数据）。代码逐文件一致，数据与密钥各自独立。</li></ul>
+<h2 id="3-组件详解">3. 组件详解</h2>
+<h3 id="31-网关-semantica-gateway">3.1 网关 semantica-gateway</h3>
+<p>nginx:alpine 单文件模板（<code>deploy/nginx/default.conf.template</code>），启动时替换 <code>${SEMANTICA_API_KEY}</code>。</p>
+<div class="table-wrap"><table><thead><tr><th>对外端口</th><th>后端</th><th>规则要点</th></tr></thead><tbody><tr><td>18835（:80）</td><td>explorer:8000</td><td>Basic Auth（团队共用账号 <code>semantica</code>）；剥掉客户端 <code>Authorization</code>、统一附加 <code>X-API-Key</code>；WebSocket 升级；请求体 ≤ 60 MB；超时 3600 s；<code>/api/health</code> 免登录</td></tr><tr><td>18835 <code>location = /mcp</code></td><td>mcp:8001</td><td><strong>不走 Basic</strong>：<code>Authorization: Bearer</code> 原样转发；<strong>清掉 <code>X-API-Key</code></strong>；按来源限流 20 r/s、突发 40；请求体 ≤ 1 MB；超时 300 s；413/429/502–504 回 JSON</td></tr><tr><td>18836（:81）</td><td>lab:8888</td><td>Basic Auth；上传 ≤ 1 GB；超时 86400 s</td></tr></tbody></table></div>
+<p>设计动机（D7、D19）：浏览器接触不到 API Key；MCP 客户端是机器身份，用独立 Bearer 令牌域，避免往共用 <code>.htpasswd</code> 加账号（那会同时给出去 REST 全量写入和 JupyterLab 代码执行权限）。<code>resolver 127.0.0.11</code> 让后端重启期间网关照常返回 502 而不是自己挂掉。</p>
+<h3 id="32-semantica-explorer界面-主-api">3.2 semantica-explorer（界面 + 主 API）</h3>
+<ul><li><strong>上游</strong>：FastAPI + uvicorn（:8000），前端 React（Vite 构建），图和状态原本只在内存。</li><li><strong>持久化包装</strong>（<code>deploy/app/explorer_persistent.py</code>，决策 D5）：不改上游源码，启动前读盘建 <code>GraphSession</code> 再调 <code>create_app()</code>；运行中每 30 秒按指纹原子写盘（临时文件 + fsync + <code>os.replace</code>）；每小时快照一份（保留 48 份）；停止时 <code>stop_grace_period: 60s</code> 内强制存盘。graph.json 读不出来就拒绝启动（提示从快照恢复）。</li><li><strong>部署专用接口 <code>/api/seed</code></strong>（<code>seed_routes.py</code>）：上游对记忆、溯源、本体版本没有 HTTP 写入口，示例数据导入程序经此写入，需 <code>X-API-Key</code>，幂等。</li><li><strong>前端汉化</strong>（<code>deploy/l10n/</code>，决策 D9）：构建期在副本上打补丁 + 用 TypeScript 编译器 API 做词条替换（约 1200 条 zh-CN 词典），加运行时兜底 <code>zh-runtime.js</code>；产物只读挂载进容器（D10），改界面只需同步文件重启容器。</li><li><strong>只读副本模式</strong>（D28）：<code>SEMANTICA_READ_ONLY=1</code> 时写接口按&quot;方法 + 路径&quot;白名单拒绝（403 中性提示），由 <code>deploy/neo4j/replica-refresh.sh</code> 以&quot;导出 → 试启动 → 停副本换文件 → 核对&quot;四步从 Neo4j 刷新（每次约 6 秒 502）。</li></ul>
+<h3 id="33-semantica-labjupyterlab">3.3 semantica-lab（JupyterLab）</h3>
+<ul><li>JupyterLab 4.6.4 中文界面，161 个附加包（openai、instructor、python-docx、pdfplumber、SQLAlchemy 等），内存 16 GB / 16 核，全团队共用。</li><li><strong>环境变量注入密钥</strong>（<code>OPENAI_API_KEY</code>、<code>SEMANTICA_API_KEY</code> 等），用户代码里不出现密钥。</li><li><strong>辅助模块 <code>semantica_lab</code></strong>：<code>read_text</code> / <code>extract</code> / <code>payload_from_extraction</code> / <code>payload_from_graph</code> / <code>push</code> / <code>stats</code>，封装&quot;读文档 → 大模型抽取 → 推入图谱&quot;流水线；含长文分段、推理模型思考开关处理（<code>install_openai_defaults()</code> 给 openai SDK 打类级补丁）。</li><li>安全边界：非 root 运行、不挂 docker.sock、可写挂载只有 workspace；Jupyter 自带 token 关闭，靠网关 Basic Auth 保护。</li></ul>
+<h3 id="34-semantica-mcpmcp-侧车">3.4 semantica-mcp（MCP 侧车）</h3>
+<p>智能体接入的唯一通道，独立容器（决策 D16），核心职责：<strong>MCP 协议适配、面向大模型的工具语义、鉴权 / 限流 / 审计、对 Explorer 的保护</strong>。</p>
+<ul><li><strong>协议</strong>：MCP Streamable HTTP 的无状态子集——只收 POST、只回 JSON、GET 回 405、不发会话 id、拒绝批量；协商版本 2025-06-18（也接受 2025-03-26、2024-11-05，新版客户端可协商出 2025-06-18）。按 AgentScope 的 MCP Java SDK 0.17.2 实测行为定制。</li><li><strong>鉴权</strong>：<code>Authorization: Bearer &lt;令牌&gt;</code>，与 <code>clients.json</code>（只存 sha256，热加载）里逐条 <code>hmac.compare_digest</code> 比对。明文令牌只存在于宿主机 <code>mcp-secrets/</code>（不挂进任何容器）和 AgentScope Vault。</li><li><strong>角色与档位</strong>：角色 reader / editor；现行<strong>唯一对外目录是精简档（compact）16 个工具（读 11、写 5）</strong>，由 native 档 38 个工具按&quot;重叠的合并、不重叠的分开&quot;派生，只转发不重写（安全检查、写入限频、审计、溯源都在 native 实现里）。说明文字从约 3.2 万字压到约 1.7 万字，每轮对话首请求输入约 17,250 → 约 12,900 token。</li><li><strong>双后端</strong>（D24，修订号 4 起）：<code>MCP_BACKENDS</code> 同时提供 Explorer 后端（REST + WS，建派生索引）和 Neo4j 后端（Bolt 直查，不建索引），按 <code>clients.json</code> 的 <code>backend</code> 字段为每个客户端选择；未启用的后端返回 503，不悄悄回退。两台服务器现网均只用 Neo4j 后端（<code>sparql_query</code> 相应换成只读 <code>cypher_query</code>）。</li><li><strong>派生索引新鲜度</strong>（D18，仅 Explorer 后端）：代际计数驱动失效——WS 变更事件、WS 重连、15 秒 stats 指纹轮询、60 秒最大年龄；读时单飞重建、读者最多等 3 秒；按类型分页拉节点把构建代价从 O(N²/页) 降到 O(N)。</li><li><strong>对 Explorer 的保护</strong>：到 Explorer 并发 6、SPARQL 并发 2、重型工具并发 1；每客户端每分钟 120 次调用；单次结果 2 万字符截断；SPARQL 拒绝 <code>SERVICE</code> / <code>FROM</code>（防 SSRF，D21）；规则推理先在侧车估算计算量，超限不交给 Explorer。</li><li><strong>容器加固</strong>：只读根文件系统（仅 64 MB <code>/tmp</code> 可写）、去全部 capability、<code>no-new-privileges</code>、不发布端口、不挂数据目录；内存 1 GB / 2 核（实际约 100–120 MiB）。</li><li><strong>一键停用</strong>：停用某客户端（1 秒内 403）、隐藏某工具（<code>tools.override.json</code>）、<code>disabled</code> 开关文件关停整个 MCP（立即 503），均不用重启。</li></ul>
+<h3 id="35-semantica-neo4j图数据库主库">3.5 semantica-neo4j（图数据库主库）</h3>
+<ul><li>Neo4j 2025.03.0 社区版，独立 compose 项目（<code>deploy/neo4j/</code>），堆 1–2 GB、页缓存 1 GB、容器内存 4 GB，1000:1000 运行，<code>no-new-privileges</code>，宿主端口只监听 127.0.0.1。</li><li><strong>数据模型</strong>（D25）：graph.json 的节点 → <code>(:Entity:&lt;类型&gt;)</code>，关系 → <code>-[:&lt;关系名&gt;]-&gt;</code>，state.json 的 7 个分区 → <code>(:SemanticaMeta:WorkspaceItem)</code>；每条记录的 <code>_raw</code> 存 Explorer REST 记录原样，辅助属性用派生索引的同一批函数算出——保证工具输出与 Explorer 后端逐项一致（A/B 验证），且能导出回 Explorer 自己的文件格式。</li><li><strong>主库标记</strong>：<code>GraphMeta.system_of_record</code>（69 与阿里云现均为 <code>neo4j</code>）。写入仅在 <code>MCP_NEO4J_WRITES</code> 打开且 Neo4j 是主库时允许；一次调用的全部写入在一个事务里提交。</li><li><strong>只读 cypher_query</strong>（D26）：静态检查 + <code>EXPLAIN</code> 预检 + READ 事务三层防护，替代 SPARQL（社区版没有只读用户，内置过程在只读事务里也能调用，故需多层防护）。</li><li><strong>溯源不进 Neo4j</strong>（D27）：仍是上游 ProvenanceManager 管理的 SQLite，Neo4j 为主库时由写入端（MCP 侧车、接入写入作业）独占，fcntl 文件锁串行化。</li><li><strong>迁移与核对</strong>：<code>python -m semantica_mcpd.graphdb.migrate bundle|load|verify|status|reset</code>、<code>graphdb.export</code>；69 上经 <code>deploy/neo4j/graphdb.sh</code> 在一次性容器里跑。</li></ul>
+<h3 id="36-agentscope合同专家智能体">3.6 AgentScope（合同专家智能体）</h3>
+<ul><li>AgentScope Java 2.0.4（构建与部署在 <code>agentscope2-java-test/</code>、<code>aliyun/agentscope/</code>），控制台 http://10.100.0.69:18180。</li><li>现行智能体：69「合同专家」（Agent <code>semantica-native</code>，精简档模板 <code>agent-compact.json</code>）、阿里云 <code>contract-expert</code>；模型 GLM-5.3。</li><li>令牌注入：Vault 里的 <code>static_bearer</code> 凭据（target = MCP 服务名 <code>semantica</code>）自动给 <code>/mcp</code> 请求加 <code>Authorization: Bearer</code>；Agent 定义里不写任何占位符。Vault 必须与 Agent 同命名空间。</li><li>16 个工具全部 <code>always_allow</code>（控制台 Chat 页没有审批界面，<code>always_ask</code> 会把回合挂死）；内置工具保留、禁用 bash/write/edit。</li></ul>
+<h3 id="37-数据接入automap-clm">3.7 数据接入（automap / CLM）</h3>
+<ul><li>关系数据库 → 图谱的自动映射流水线：<code>semantica.ingest.DBIngestor</code> 只读连接源库 → 大模型生成映射（表 → 类、列 → 属性、外键 → 关系）→ 演练（dryrun）→ 人工审核意见 → 导入（push）。</li><li>执行器 <code>deploy/integrations/automap/onboard_runner.py</code> 经 spool 目录与 MCP 侧车通信；智能体用 <code>database_onboarding</code> 工具即可发起、续跑（<code>resume_job_id</code>，湖仓合同从头约 1 小时 → 续跑 15–25 秒）、带审核意见（<code>review_edits</code>）、取消。</li><li>湖仓链路（DataX）：69 的真实合同数据（25,690 实体 / 56,123 关系）即由此导入。</li></ul>
+<h2 id="4-技术栈">4. 技术栈</h2>
+<div class="table-wrap"><table><thead><tr><th>层</th><th>技术</th></tr></thead><tbody><tr><td>前端</td><td>React + Vite + Monaco（上游），构建期汉化流水线（Node、tsc API）</td></tr><tr><td>图谱服务</td><td>Python 3.12.13、FastAPI、uvicorn、rdflib（SPARQL）、pyshacl / owlrl（SHACL）</td></tr><tr><td>分析环境</td><td>JupyterLab 4.6.4、openai SDK、instructor、SQLAlchemy</td></tr><tr><td>MCP 服务</td><td>自研 <code>semantica_mcpd</code>（uvicorn），MCP Streamable HTTP 无状态子集</td></tr><tr><td>图数据库</td><td>Neo4j 2025.03.0 社区版（Python 驱动 neo4j 6.4.1）</td></tr><tr><td>溯源</td><td>SQLite（上游 ProvenanceManager，哈希链）</td></tr><tr><td>网关</td><td>nginx:alpine（Basic Auth + 模板变量 + 限流）</td></tr><tr><td>智能体平台</td><td>AgentScope Java 2.0.4（MCP Java SDK 0.17.2）</td></tr><tr><td>大模型</td><td>内网网关 <code>http://10.100.0.12:8000/v1</code>，默认 GLM-5.3，备选 Qwen3.8-27B</td></tr><tr><td>部署</td><td>Docker Compose（多项目：semantica-lab、semantica-neo4j），完全离线构建（wheel 带哈希锁定）</td></tr></tbody></table></div>
+<h2 id="5-数据架构与数据流">5. 数据架构与数据流</h2>
+<div class="code-block"><pre><code>【写入路径】
+关系数据库/湖仓 ──automap(DBIngestor+LLM 映射+演练+审核)──► Neo4j 主库（一个事务提交，修订号+1）
+智能体 write_entity / add_relationship / write_decision ──► MCP 侧车 ──► Neo4j 主库
+JupyterLab 实验（lab.push）──► Explorer REST ──►（69 已切主库，实验数据走 Neo4j 写入链路）
+
+【读取路径】
+浏览器 ──► 网关 ──► Explorer（只读副本，replica-refresh.sh 定期从 Neo4j 刷新，约 6 秒 502/次）
+智能体 ──► 网关 /mcp ──► MCP 侧车 ──► Bolt ──► Neo4j 主库（cypher_query 等只读查询）
+
+【溯源】
+写入端独占 provenance SQLite（fcntl 锁）；Explorer 副本用自己的副本文件</code></pre></div>
+<ul><li><strong>目录布局</strong>：代码根（<code>/mnt/llm/semantica</code>，与仓库同步）与状态根（<code>/mnt/llm/semantica-data</code>，不同步、升级不删）分离（D6）；密钥全部在状态根（600/700 权限），不进仓库。</li><li><strong>一致性</strong>：Neo4j 后端与 Explorer 后端的工具输出逐字比较测试 + 真实数据 A/B；有意的差异逐条登记。</li><li><strong>备份</strong>：Explorer 每小时快照（48 份轮换）+ 图谱与溯源库分别备份；Neo4j 主库整库恢复不能用 reset + load，另有专门步骤（12 §12）。</li></ul>
+<h2 id="6-关键设计决策摘要">6. 关键设计决策摘要</h2>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>决策</th><th>一句话理由</th></tr></thead><tbody><tr><td>D5</td><td>持久化用启动包装，不改上游源码</td><td><code>src/</code> 保持原样，方便升级；代价是依赖上游内部名字</td></tr><tr><td>D8</td><td>全团队一张图，按实验名分命名空间</td><td>协作简单；上游无删点接口，清理只能整图重置</td></tr><tr><td>D16</td><td>智能体接入用独立 MCP 侧车容器</td><td>上线/回滚不动 Explorer；MCP 故障不影响界面与存盘</td></tr><tr><td>D17</td><td>协议用 Streamable HTTP 无状态子集</td><td>匹配 AgentScope Java 客户端实测行为；服务重启不用重连</td></tr><tr><td>D19</td><td>MCP 用独立 Bearer 凭据域</td><td>机器身份与人的 Basic 账号隔离；令牌只在 <code>/mcp</code> 有效</td></tr><tr><td>D23</td><td>图谱放入硬盘上的 Neo4j，MCP 直查</td><td>摆脱内存规模限制（湖仓 56,340 条关系已超上游 SPARQL 5 万上限）</td></tr><tr><td>D24</td><td>一个侧车双后端，按客户端选择</td><td>工具规格只有一份，可在同进程逐项 A/B，切换只改配置</td></tr><tr><td>D25</td><td><code>_raw</code> 存原样记录 + 派生函数算辅助属性</td><td>输出与 Explorer 后端逐项一致，又能导回 Explorer 格式</td></tr><tr><td>D26</td><td>只读 cypher_query 三层防护</td><td>社区版没有只读用户，内置过程需事务层拦截</td></tr><tr><td>D27</td><td>溯源不进 Neo4j，仍是 SQLite</td><td>沿用上游记录格式与哈希链；副本可直接读同种文件</td></tr><tr><td>D28</td><td>Neo4j 主库时 Explorer 只读副本</td><td>汉化界面原样可用；上游新增写接口也拦得住</td></tr><tr><td>D29</td><td>Neo4j 写入双重开关（环境变量 + 主库标记）</td><td>防止往副本里写数据导致两边不一致</td></tr></tbody></table></div>
+<h2 id="7-已知限制与演进路线">7. 已知限制与演进路线</h2>
+<p><strong>当前限制</strong></p>
+<ul><li>Explorer 界面上的智能体写入要等下次副本刷新才可见；界面写按钮可见但点了只得到中性提示。</li><li>关系写进去不能删除（上游限制）；删除实体即&quot;归档&quot;，可恢复。</li><li>Neo4j 后端简单查找比内存索引慢（几十毫秒对几毫秒；find_paths 中位数约 0.36 秒）。</li><li>共用 Basic 账号，无法按人审计界面操作；REST <code>/api/sparql</code> 的 SERVICE 拦截在第三期才做。</li><li>图超 20 万节点 / 50 万关系时（Explorer 后端）派生索引工具回退 REST。</li></ul>
+<p><strong>演进路线</strong></p>
+<ul><li>第一期（已上线）：只读 MCP。</li><li>第二期（部分已随 native/compact 档上线）：写入工具、维护助手。</li><li>第三期（计划）：Explorer 加固——REST 拦 SERVICE、SPARQL 与推理可中止、可选 revision 接口（需一次 Explorer 重启窗口）。</li></ul>
+<h2 id="8-相关文档索引">8. 相关文档索引</h2>
+<div class="table-wrap"><table><thead><tr><th>主题</th><th>文档</th></tr></thead><tbody><tr><td>需求 / 设计 / 开发</td><td><code>semantica/docs/01-需求说明.md</code>、<code>02-设计说明.md</code>、<code>04-开发说明.md</code></td></tr><tr><td>部署 / 运维</td><td><code>06-部署手册.md</code>、<code>08-运维手册.md</code></td></tr><tr><td>智能体接入（MCP）</td><td><code>10-智能体接入（MCP）.md</code></td></tr><tr><td>数据库接入（CLM）</td><td><code>11-数据库接入（CLM）.md</code></td></tr><tr><td>图数据库（Neo4j）</td><td><code>12-图数据库（Neo4j）.md</code></td></tr><tr><td>使用教程</td><td>见同目录《Semantica使用教程.md》</td></tr></tbody></table></div></article>
+<nav class="pager"><a href="tutorial.html"><div class="dir">下一篇</div><div class="name">使用教程</div></a></nav>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <span>Semantica 语义知识图谱 · 文档中心</span>
+  <span>分支 semantica-system · 更新于 2026-11-06</span>
+</footer>
+
+<div class="search-overlay">
+  <div class="search-panel">
+    <div class="search-field">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="text" placeholder="搜索章节、工具、命令…" autocomplete="off" spellcheck="false">
+      <span class="esc">ESC</span>
+    </div>
+    <div class="search-results"></div>
+    <div class="search-hint">输入关键词开始检索，↑↓ 选择，Enter 跳转</div>
+  </div>
+</div>
+
+<script src="assets/search-index.js"></script>
+<script src="assets/site.js"></script>
+</body>
+</html>

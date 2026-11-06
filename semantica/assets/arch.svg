@@ -1,0 +1,89 @@
+<svg viewBox="0 0 1040 600" xmlns="http://www.w3.org/2000/svg" class="arch-svg" role="img" aria-label="Semantica 总体架构：网关、三个服务、Neo4j 与数据根">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line-strong)"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- 使用者 -->
+  <text x="40" y="14" class="d-note" letter-spacing="1.4">使用者 / 调用方</text>
+
+  <rect x="40" y="24" width="280" height="62" rx="13" class="d-box"/>
+  <text x="180" y="52" text-anchor="middle" class="d-label">浏览器</text>
+  <text x="180" y="72" text-anchor="middle" class="d-sub">团队成员 · Basic Auth</text>
+
+  <rect x="380" y="24" width="280" height="62" rx="13" class="d-box--violet d-box"/>
+  <text x="520" y="52" text-anchor="middle" class="d-label">AgentScope 智能体</text>
+  <text x="520" y="72" text-anchor="middle" class="d-sub">Bearer 令牌 · /mcp</text>
+
+  <rect x="720" y="24" width="280" height="62" rx="13" class="d-box"/>
+  <text x="860" y="52" text-anchor="middle" class="d-label">JupyterLab 用户</text>
+  <text x="860" y="72" text-anchor="middle" class="d-sub">抽取实验 · Python</text>
+
+  <!-- 连线：使用者 → 网关 -->
+  <line x1="180" y1="86" x2="180" y2="128" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="520" y1="86" x2="520" y2="128" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="860" y1="86" x2="860" y2="128" class="d-line" marker-end="url(#arrow)"/>
+
+  <!-- 网关 -->
+  <rect x="40" y="132" width="960" height="96" rx="14" class="d-box--accent d-box"/>
+  <text x="64" y="164" class="d-label">semantica-gateway · nginx:alpine</text>
+  <text x="64" y="188" class="d-sub">:18835 → Explorer 与 /mcp　·　:18836 → Lab　·　到后端只保留内网访问</text>
+  <text x="64" y="210" class="d-note">页面代加 X-API-Key；/mcp 转发 Bearer 并清除 X-API-Key；限流 20 r/s</text>
+
+  <rect x="852" y="150" width="124" height="26" rx="7" fill="var(--accent-soft)" stroke="none"/>
+  <text x="914" y="168" text-anchor="middle" class="d-sub" fill="var(--accent)">统一入口</text>
+
+  <!-- 连线：网关 → 服务 -->
+  <line x1="185" y1="228" x2="185" y2="278" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="520" y1="228" x2="520" y2="278" class="d-line" marker-end="url(#arrow)"/>
+  <line x1="855" y1="228" x2="855" y2="278" class="d-line" marker-end="url(#arrow)"/>
+
+  <!-- 服务 -->
+  <rect x="40" y="282" width="290" height="108" rx="13" class="d-box"/>
+  <text x="185" y="312" text-anchor="middle" class="d-label">semantica-explorer</text>
+  <text x="185" y="333" text-anchor="middle" class="d-sub">FastAPI :8000 · 界面 + 主 API</text>
+  <text x="185" y="353" text-anchor="middle" class="d-note">上游源码不改 · 启动包装持久化</text>
+  <text x="185" y="373" text-anchor="middle" class="d-note">Neo4j 主库时为只读副本</text>
+
+  <rect x="375" y="282" width="290" height="108" rx="13" class="d-box--accent d-box"/>
+  <text x="520" y="312" text-anchor="middle" class="d-label">semantica-mcp</text>
+  <text x="520" y="333" text-anchor="middle" class="d-sub">uvicorn :8001 · 16 个工具</text>
+  <text x="520" y="353" text-anchor="middle" class="d-note">协议适配 · 鉴权 · 限流 · 审计</text>
+  <text x="520" y="373" text-anchor="middle" class="d-note">只读根文件系统 · 不挂数据目录</text>
+
+  <rect x="710" y="282" width="290" height="108" rx="13" class="d-box"/>
+  <text x="855" y="312" text-anchor="middle" class="d-label">semantica-lab</text>
+  <text x="855" y="333" text-anchor="middle" class="d-sub">JupyterLab :8888 · 中文界面</text>
+  <text x="855" y="353" text-anchor="middle" class="d-note">semantica_lab 抽取流水线</text>
+  <text x="855" y="373" text-anchor="middle" class="d-note">直连 explorer:8000</text>
+
+  <!-- 连线：服务 → 存储 -->
+  <line x1="185" y1="390" x2="185" y2="442" class="d-line" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="199" y="421" class="d-note">副本刷新（约 6 秒）</text>
+
+  <line x1="470" y1="390" x2="330" y2="442" class="d-line" marker-end="url(#arrow)"/>
+  <text x="486" y="414" class="d-note">Bolt 直查</text>
+
+  <!-- 存储 -->
+  <rect x="40" y="446" width="470" height="112" rx="13" class="d-box--violet d-box"/>
+  <text x="275" y="476" text-anchor="middle" class="d-label">semantica-neo4j</text>
+  <text x="275" y="497" text-anchor="middle" class="d-sub">Neo4j 2025.03 社区版 · :7687</text>
+  <text x="275" y="518" text-anchor="middle" class="d-note">(:Entity:类型) / -[:关系名]-&gt; / (:SemanticaMeta)</text>
+  <text x="275" y="538" text-anchor="middle" class="d-note">GraphMeta.system_of_record = neo4j（主库）</text>
+
+  <rect x="540" y="446" width="460" height="112" rx="13" class="d-box"/>
+  <text x="770" y="476" text-anchor="middle" class="d-label">数据根 /mnt/llm/semantica-data</text>
+  <text x="770" y="497" text-anchor="middle" class="d-sub">explorer/ · workspace/ · mcp/</text>
+  <text x="770" y="518" text-anchor="middle" class="d-note">graph.json · state.json · provenance.db</text>
+  <text x="770" y="538" text-anchor="middle" class="d-note">快照每小时一份 · 密钥不进仓库</text>
+
+  <!-- 图例 -->
+  <line x1="40" y1="582" x2="76" y2="582" class="d-line"/>
+  <text x="84" y="586" class="d-note">请求链路</text>
+  <line x1="170" y1="582" x2="206" y2="582" class="d-line d-line--dash"/>
+  <text x="214" y="586" class="d-note">可选 / 备选后端</text>
+</svg>
