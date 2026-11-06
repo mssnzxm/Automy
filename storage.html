@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>存储与表格式层 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧目录 + 右侧正文 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#positioning">本层定位</a>
+      <a href="#iceberg">Apache Iceberg 表格式</a>
+      <a href="#hdfs">HDFS 分布式文件系统</a>
+      <a href="#object-storage">S3/MinIO 对象存储</a>
+      <a href="#hms">Hive Metastore 元数据服务</a>
+      <a href="#tuning">存储层调优要点</a>
+      <a href="#boundary">适用边界</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">存储与表格式层</h1>
+      <div class="page-intro">
+        本页深入讲解湖仓一体的存储底座：对象存储、开放表格式（Apache Iceberg）与元数据服务（Hive Metastore）
+        三件套的分工与协作，并给出 HDFS / S3 / MinIO 的选型依据、关键配置与生产调优经验。读完本页，
+        你将能够独立设计一个与计算引擎解耦、可被多引擎共享读写的企业级存储层。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="positioning">本层定位</h2>
+      <p>传统数仓（如 Teradata、Greenplum）把存储与计算耦合在同一集群，扩容时“为算力买单却买回一堆磁盘”，缩容时数据要搬家。
+        湖仓一体的存储层通过<strong>“对象存储 + 开放表格式 + 元数据服务”三件套</strong>实现存算分离：
+        计算引擎无状态、可弹性伸缩，数据以开放格式长期沉淀在廉价可扩展的存储上。</p>
+
+      <div class="arch-layer">计算引擎层：Spark / Flink / Trino / Doris（无状态，可随时启停与替换）</div>
+      <div class="arch-layer">元数据服务层：Hive Metastore / JDBC Catalog / REST Catalog（表的“电话簿”）</div>
+      <div class="arch-layer">开放表格式层：Iceberg / Delta / Hudi（表语义、ACID 事务、快照）</div>
+      <div class="arch-layer">物理存储层：S3 / MinIO / HDFS + Parquet 列式文件（数据的最终归宿）</div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>对象存储 <span class="pill">物理底座</span></h3>
+          <p>提供近无限容量、按量计费的块级字节空间。不懂文件系统语义（没有原子 rename），
+            只保证单个对象 PUT 的原子性与读到的强一致性。</p>
+        </div>
+        <div class="card">
+          <h3>开放表格式 <span class="pill">表语义层</span></h3>
+          <p>在文件之上定义“表”：schema、分区、事务、快照。把表元数据本身也做成存储上的开放文件，
+            使任何引擎都能独立读写同一张表，这是湖仓与传统数据湖的分水岭。</p>
+        </div>
+        <div class="card">
+          <h3>元数据服务 <span class="pill">目录层</span></h3>
+          <p>Catalog 负责回答“有哪些库表、当前有效的元数据文件是哪一个”。
+            它只存指针与 schema，不存数据与事务状态，因此可以随时重建或替换。</p>
+        </div>
+      </div>
+
+      <h3>与上层引擎解耦的原理</h3>
+      <p>解耦不是口号，而是四条可验证的机制。逐层向下，每一层都只依赖“开放的协议”，而不依赖任何单一引擎：</p>
+      <ol>
+        <li><strong>存算分离</strong>：引擎不持有数据，节点宕机/缩容不丢数据；同一份数据可同时被批、流、OLAP 引擎挂载。</li>
+        <li><strong>开放文件格式</strong>：数据落地为 Parquet 列存，这是行业公共协议，任何新引擎都能直接解析，无需“搬家”。</li>
+        <li><strong>自描述元数据</strong>：表结构、分区、快照全部记录在存储上的元数据文件中（如 Iceberg 的 metadata.json），
+          引擎通过 Catalog 拿到入口指针即可独立读写，不依赖某个中心服务的运行状态。</li>
+        <li><strong>提交协议标准化</strong>：事务提交 = “原子地切换元数据指针”（条件写或 Catalog 乐观锁），
+          避开对象存储“无原子 rename”的硬伤，多引擎并发写同一张表也不会互相覆盖。</li>
+      </ol>
+
+      <div class="diagram">
+        <svg width="620" height="330" viewBox="0 0 620 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="多引擎共享同一 Iceberg 存储示意">
+          <rect x="10" y="10" width="140" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="80" y="37" text-anchor="middle" fill="#ffffff" font-size="14">Spark（批）</text>
+          <rect x="160" y="10" width="140" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="230" y="37" text-anchor="middle" fill="#ffffff" font-size="14">Flink（流）</text>
+          <rect x="310" y="10" width="140" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="380" y="37" text-anchor="middle" fill="#ffffff" font-size="14">Trino（OLAP）</text>
+          <rect x="460" y="10" width="150" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="535" y="37" text-anchor="middle" fill="#ffffff" font-size="14">Doris（OLAP）</text>
+          <line x1="80" y1="54" x2="80" y2="86" stroke="#475569" stroke-width="2"></line>
+          <line x1="230" y1="54" x2="230" y2="86" stroke="#475569" stroke-width="2"></line>
+          <line x1="380" y1="54" x2="380" y2="86" stroke="#475569" stroke-width="2"></line>
+          <line x1="535" y1="54" x2="535" y2="86" stroke="#475569" stroke-width="2"></line>
+          <rect x="10" y="88" width="600" height="46" rx="8" fill="#155e75"></rect>
+          <text x="310" y="116" text-anchor="middle" fill="#ffffff" font-size="14">统一 Catalog（Hive Metastore / JDBC / REST）：只回答“表在哪、入口元数据是谁”</text>
+          <line x1="310" y1="134" x2="310" y2="166" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,172 304,162 316,162" fill="#475569"></polygon>
+          <rect x="10" y="172" width="600" height="46" rx="8" fill="#0d9488"></rect>
+          <text x="310" y="200" text-anchor="middle" fill="#ffffff" font-size="14">Iceberg 表格式：metadata.json → snapshot → manifest 元数据树 + ACID 提交协议</text>
+          <line x1="310" y1="218" x2="310" y2="250" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,256 304,246 316,246" fill="#475569"></polygon>
+          <rect x="10" y="256" width="600" height="46" rx="8" fill="#5eead4"></rect>
+          <text x="310" y="284" text-anchor="middle" fill="#134e4a" font-size="14">对象存储 / HDFS：Parquet 数据文件 + 元数据文件（同层共置，一体提交）</text>
+        </svg>
+      </div>
+
+      <div class="callout">
+        <strong>为什么“表格式”是分水岭</strong>：传统 Hive 表的“事务边界”其实依赖 HDFS 的原子 rename 与 NameNode 目录语义，
+          引擎换到对象存储后这套假设全部失效。Iceberg 等表格式把“什么是一次安全的提交”从文件系统下沉为元数据文件协议，
+          从此存储可以自由替换（HDFS ↔ S3 ↔ MinIO），引擎也可以自由组合——这正是本教程后续所有章节的地基。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="iceberg">Apache Iceberg 表格式</h2>
+      <p>Apache Iceberg 由 Netflix 为解决“数 PB 级 Hive 表在日常运维中频繁出错”而设计，2020 年进入 Apache 顶级项目。
+        它在文件系统之上定义了一套树状元数据结构，为湖仓表带来四个核心能力：</p>
+      <ul>
+        <li><span class="tag">ACID</span> 每次 commit 生成一个不可变快照（snapshot），读方永远看到一致视图；写方通过乐观并发 + 冲突重试实现串行化隔离。</li>
+        <li><span class="tag">Schema 演进</span> 安全地增列、删列、改名、调整列顺序，只改元数据、不重写数据文件；历史快照按旧 schema 依旧可读。</li>
+        <li><span class="tag">隐藏分区</span> 分区值由列的变换函数（days / bucket / truncate）自动推导，用户与数据无需感知分区列。</li>
+        <li><span class="tag">时间旅行</span> 任意历史快照可重复查询，天然支撑审计、回滚与增量消费。</li>
+      </ul>
+
+      <h3>元数据树：metadata.json → snapshot → manifest → data file</h3>
+      <p>Iceberg 的一切能力都源于这棵“自描述”的元数据树。读写双方只需约定入口（当前 metadata.json），其余全部按文件指针逐级展开：</p>
+
+      <div class="diagram">
+        <svg width="620" height="420" viewBox="0 0 620 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Iceberg 元数据树结构图">
+          <rect x="175" y="8" width="270" height="42" rx="8" fill="#0f766e"></rect>
+          <text x="310" y="34" text-anchor="middle" fill="#ffffff" font-size="14">metadata.json（表级入口，含 schema/属性）</text>
+          <line x1="310" y1="50" x2="310" y2="76" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,82 304,72 316,72" fill="#475569"></polygon>
+          <text x="462" y="70" fill="#475569" font-size="12">current-snapshot-id 指针</text>
+          <rect x="175" y="84" width="270" height="42" rx="8" fill="#0d9488"></rect>
+          <text x="310" y="110" text-anchor="middle" fill="#ffffff" font-size="14">snapshot（本次提交的不可变快照）</text>
+          <line x1="310" y1="126" x2="310" y2="152" stroke="#475569" stroke-width="2"></line>
+          <polygon points="310,158 304,148 316,148" fill="#475569"></polygon>
+          <text x="455" y="146" fill="#475569" font-size="12">每次 commit 新增一个，形成快照链</text>
+          <rect x="175" y="160" width="270" height="42" rx="8" fill="#14b8a6"></rect>
+          <text x="310" y="186" text-anchor="middle" fill="#ffffff" font-size="14">manifest-list（snap-N.avro：清单的清单）</text>
+          <line x1="310" y1="202" x2="120" y2="240" stroke="#475569" stroke-width="2"></line>
+          <line x1="310" y1="202" x2="310" y2="240" stroke="#475569" stroke-width="2"></line>
+          <line x1="310" y1="202" x2="500" y2="240" stroke="#475569" stroke-width="2"></line>
+          <rect x="30" y="242" width="180" height="42" rx="8" fill="#334155"></rect>
+          <text x="120" y="268" text-anchor="middle" fill="#ffffff" font-size="13">manifest-0.avro（分区/文件）</text>
+          <rect x="220" y="242" width="180" height="42" rx="8" fill="#334155"></rect>
+          <text x="310" y="268" text-anchor="middle" fill="#ffffff" font-size="13">manifest-1.avro（分区/文件）</text>
+          <rect x="410" y="242" width="180" height="42" rx="8" fill="#334155"></rect>
+          <text x="500" y="268" text-anchor="middle" fill="#ffffff" font-size="13">manifest-2.avro（…）</text>
+          <text x="310" y="306" text-anchor="middle" fill="#475569" font-size="12">manifest 条目记录每个数据文件的路径、分区值与统计信息（min / max / null 计数）</text>
+          <line x1="120" y1="284" x2="90" y2="330" stroke="#475569" stroke-width="2"></line>
+          <line x1="120" y1="284" x2="185" y2="330" stroke="#475569" stroke-width="2"></line>
+          <line x1="310" y1="284" x2="280" y2="330" stroke="#475569" stroke-width="2"></line>
+          <line x1="310" y1="284" x2="375" y2="330" stroke="#475569" stroke-width="2"></line>
+          <line x1="500" y1="284" x2="470" y2="330" stroke="#475569" stroke-width="2"></line>
+          <line x1="500" y1="284" x2="565" y2="330" stroke="#475569" stroke-width="2"></line>
+          <rect x="30" y="332" width="110" height="40" rx="6" fill="#e2e8f0"></rect>
+          <text x="85" y="357" text-anchor="middle" fill="#0f172a" font-size="12">00000-0.parquet</text>
+          <rect x="150" y="332" width="110" height="40" rx="6" fill="#e2e8f0"></rect>
+          <text x="205" y="357" text-anchor="middle" fill="#0f172a" font-size="12">00001-0.parquet</text>
+          <rect x="270" y="332" width="110" height="40" rx="6" fill="#e2e8f0"></rect>
+          <text x="325" y="357" text-anchor="middle" fill="#0f172a" font-size="12">00002-0.parquet</text>
+          <rect x="390" y="332" width="110" height="40" rx="6" fill="#e2e8f0"></rect>
+          <text x="445" y="357" text-anchor="middle" fill="#0f172a" font-size="12">00003-0.parquet</text>
+          <rect x="510" y="332" width="90" height="40" rx="6" fill="#e2e8f0"></rect>
+          <text x="555" y="357" text-anchor="middle" fill="#0f172a" font-size="12">…（删除文件）</text>
+          <text x="310" y="398" text-anchor="middle" fill="#475569" font-size="12">提交 = 写新 manifest + 新 snapshot + 新 metadata.json，最后原子切换 Catalog 指针</text>
+        </svg>
+      </div>
+
+      <ol>
+        <li><strong>metadata.json</strong>：表入口文件，记录表 UUID、当前 schema、分区规格、属性与快照列表；
+          文件名自带版本号（00001-xxxx.metadata.json），提交即产生新版本。</li>
+        <li><strong>snapshot</strong>：一次成功提交的不可变快照，包含操作类型（append / overwrite / delete）、
+          指向 manifest-list 的指针与汇总统计（added-files、total-records 等）。</li>
+        <li><strong>manifest-list / manifest</strong>：清单文件（Avro）逐条记录数据文件路径、分区值与
+          min/max/null 统计，是<strong>分区裁剪与文件级跳过</strong>的物理依据。</li>
+        <li><strong>data file</strong>：真正的 Parquet/ORC/Avro 数据文件，文件名含分布式唯一 ID，永不覆盖重写。</li>
+      </ol>
+
+      <div class="callout">
+        <strong>为什么读性能好</strong>：查询引擎先在 manifest 上用分区值与 min/max 统计做“文件级索引过滤”，
+          绝大多数不符合条件的数据文件根本不会被打开。这套统计随写入自动维护，不需要额外构建索引服务。
+      </div>
+
+      <h3>隐藏分区 vs Hive 分区</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Hive 分区</th>
+            <th>Iceberg 隐藏分区</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>分区列</td>
+            <td>必须是表中冗余存储的物理列（如 dt string）</td>
+            <td>任意列的变换：<code>days(ts)</code>、<code>bucket(16, user_id)</code>、<code>truncate(10, city)</code>，无需冗余列</td>
+          </tr>
+          <tr>
+            <td>分区值来源</td>
+            <td>写入方手工指定，<strong>写错分区无人拦截</strong>（经典事故源）</td>
+            <td>引擎按 transform 自动推导，结构上不可能写错分区</td>
+          </tr>
+          <tr>
+            <td>分区演进</td>
+            <td>改分区结构 = 重建表 + 全量重写历史数据</td>
+            <td>分区规格可演进，新旧规格在同一张表共存</td>
+          </tr>
+          <tr>
+            <td>查询体验</td>
+            <td>用户必须感知分区列并在 SQL 里写出过滤条件</td>
+            <td>对 <code>ts &gt; '2026-11-01'</code> 的过滤被自动换算成分区裁剪</td>
+          </tr>
+          <tr>
+            <td>列裁剪友好度</td>
+            <td>冗余列占存储且容易与源列不一致</td>
+            <td>单一事实来源，无冗余</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>与 Delta Lake / Hudi 对比</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Apache Iceberg</th>
+            <th>Delta Lake</th>
+            <th>Apache Hudi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>引擎中立性</td>
+            <td>Spark / Flink / Trino / Doris / StarRocks 一等公民</td>
+            <td>深度绑定 Spark（Flink、Trino 支持相对较晚、能力较弱）</td>
+            <td>Spark / Flink / Trino</td>
+          </tr>
+          <tr>
+            <td>元数据结构</td>
+            <td>metadata.json + snapshot + manifest 三层树，天然支撑超大规模表</td>
+            <td>单线事务日志 _delta_log（顺序 JSON，大表依赖 Optimize/LogStore）</td>
+            <td>timeline 时间线 + .hoodie 元数据目录</td>
+          </tr>
+          <tr>
+            <td>分区演进 / 隐藏分区</td>
+            <td>均支持</td>
+            <td>不支持（沿用 Hive 显式分区）</td>
+            <td>有限支持</td>
+          </tr>
+          <tr>
+            <td>Schema 演进</td>
+            <td>增/删/改名/重排均安全，历史快照可读</td>
+            <td>增/删安全，改名等价于“删旧列+加新列”</td>
+            <td>支持（行为随表类型变化）</td>
+          </tr>
+          <tr>
+            <td>记录级 upsert</td>
+            <td>MERGE INTO + v2 行级删除文件（equality/position delete）</td>
+            <td>MERGE INTO（写入路径重写文件为主）</td>
+            <td>原生主键语义，COW/MOR 双表型，生态成熟</td>
+          </tr>
+          <tr>
+            <td>社区格局</td>
+            <td>中立基金会治理，多云厂商共建（Apple/Netflix/Tabular 系）</td>
+            <td>Databricks 主导</td>
+            <td>Uber 发起，印度社区活跃</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Spark 建表：分区、排序与写入属性</h3>
+      <pre><code>-- 完整建表：隐藏分区 + 目标文件大小 + 压缩与元数据治理属性
+CREATE TABLE lakehouse.dws_orders (
+  order_id     BIGINT,
+  user_id      STRING,
+  city         STRING,
+  order_amount DECIMAL(12, 2),
+  order_ts     TIMESTAMP          <span class="comment">-- 不需要冗余 dt 列，分区由变换推导</span>
+) USING iceberg
+PARTITIONED BY (days(order_ts))               <span class="comment">-- 隐藏分区：按天，自动裁剪</span>
+TBLPROPERTIES (
+  'format-version'                     = '2',           <span class="comment">-- v2 支持行级删除（MERGE/删除必需）</span>
+  'write.format.default'               = 'parquet',
+  'write.target-file-size-bytes'       = '268435456',   <span class="comment">-- 目标文件 256MB，防小文件</span>
+  'write.parquet.compression-codec'    = 'zstd',
+  'write.parquet.row-group-size-bytes' = '134217728',   <span class="comment">-- 行组 128MB</span>
+  'write.distribution-mode'            = 'hash',        <span class="comment">-- 写入按分区键 shuffle，减少每任务小文件</span>
+  'write.metadata.previous-versions-max'        = '100',
+  'write.metadata.delete-after-commit.enabled'  = 'true' <span class="comment">-- 自动清理过期 metadata.json</span>
+);
+
+<span class="comment">-- 数据按时间聚簇（Z-Order/排序），提升范围扫描时文件级跳过命中率</span>
+ALTER TABLE lakehouse.dws_orders WRITE ORDERED BY (order_ts);
+
+<span class="comment">-- 需要按用户打散时可用多列排序，兼顾多种查询模式</span>
+ALTER TABLE lakehouse.dws_orders WRITE ORDERED BY (city, order_ts);</code></pre>
+
+      <h3>MERGE INTO：行级更新与打宽</h3>
+      <pre><code>-- 以订单号为主键：迟到更新覆盖、删除标记生效、新单插入，一次提交完成
+MERGE INTO lakehouse.dws_orders t
+USING (
+  SELECT * FROM lakehouse.stg_orders
+  WHERE etl_date = current_date()
+) s
+ON t.order_id = s.order_id
+WHEN MATCHED AND s.op_type = 'D' THEN DELETE
+WHEN MATCHED THEN UPDATE SET
+  t.order_amount = s.order_amount,
+  t.order_ts     = s.order_ts,
+  t.city         = s.city
+WHEN NOT MATCHED THEN INSERT (
+  order_id, user_id, city, order_amount, order_ts
+) VALUES (
+  s.order_id, s.user_id, s.city, s.order_amount, s.order_ts
+);
+
+<span class="comment">-- 执行计划验证：确认走了“重写受影响文件 + 删除文件”而非全表重写</span>
+EXPLAIN MERGE INTO lakehouse.dws_orders t USING lakehouse.stg_orders s
+ON t.order_id = s.order_id WHEN MATCHED THEN UPDATE SET *;</code></pre>
+
+      <h3>时间旅行查询</h3>
+      <pre><code>-- 1）查看快照历史：拿到 snapshot_id 与提交时间
+SELECT snapshot_id, committed_at, operation,
+       summary['total-records'] AS records
+FROM lakehouse.dws_orders.snapshots
+ORDER BY committed_at DESC LIMIT 10;
+
+-- 2）按 snapshot_id 精确回溯（VERSION AS OF）
+SELECT count(*) FROM lakehouse.dws_orders VERSION AS OF 3448727692459611912;
+
+-- 3）按时间点回溯（TIMESTAMP AS OF）：查“上周末对账时”的数据
+SELECT * FROM lakehouse.dws_orders
+TIMESTAMP AS OF '2026-11-01 00:00:00'
+WHERE order_amount &gt; 10000;
+
+-- 4）增量消费：两个快照之间的变更（DataFrame API）
+-- spark.read
+--   .option("start-snapshot-id", "3448727692459611912")
+--   .option("end-snapshot-id",   "7493257963288711204")
+--   .table("lakehouse.dws_orders")</code></pre>
+
+      <h3>Flink SQL 写 Iceberg</h3>
+      <pre><code>-- Flink SQL：注册指向 Hive Metastore 的 Iceberg Catalog
+CREATE CATALOG iceberg_hms WITH (
+  'type'         = 'iceberg',
+  'catalog-type' = 'hive',
+  'uri'          = 'thrift://hms.lakehouse.local:9083',
+  'warehouse'    = 's3a://lakehouse/warehouse',
+  's3.endpoint'  = 'http://minio.lakehouse.local:9000',   <span class="comment">-- MinIO 私有化部署时指定</span>
+  's3.path.style.access' = 'true'
+);
+
+-- 流式写入：数据的可见性由 Checkpoint 提交触发（详见 compute.html）
+INSERT INTO iceberg_hms.lakehouse.dws_orders
+SELECT order_id, user_id, city, order_amount, order_ts
+FROM kafka_orders;</code></pre>
+
+      <div class="callout-warn">
+        <strong>时间旅行 ≠ 无限回滚</strong>：历史快照依赖未被清理的数据文件。生产表必须配置快照过期策略
+          （<code>expire_snapshots</code>，见下文调优一节），否则 metadata.json、manifest 与已逻辑删除的数据文件会无限累积，
+          最终拖垮所有引擎的 planning 阶段。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="hdfs">HDFS 分布式文件系统</h2>
+      <p>尽管对象存储已成湖仓首选，HDFS 仍是大量存量私有机房的中坚。理解它的架构，也有助于理解对象存储“放弃”了哪些能力。</p>
+
+      <h3>NameNode / DataNode 架构</h3>
+      <ul>
+        <li><strong>NameNode（主）</strong>：维护文件系统命名空间（目录树、块映射）于内存，持久化为 FSImage + EditLog；
+          是整个集群的单一元数据中心——也是小文件问题的根源（每个文件/目录/块约占数百字节内存）。</li>
+        <li><strong>DataNode（从）</strong>：存储实际数据块，定期心跳与块报告（BlockReport）给 NameNode，负责块的读写与副本流水线复制。</li>
+        <li><strong>高可用</strong>：JournalNode 组成的共享 EditLog + Active/Standby 双 NameNode + ZKFC 自动故障切换，
+          避免单点瘫痪；SecondaryNameNode 只做镜像合并，不是热备。</li>
+      </ul>
+
+      <h3>块、副本与机架感知</h3>
+      <p>文件被切分为固定大小的块（默认 128MB），每块默认 3 副本。副本放置由<strong>机架感知策略</strong>决定：
+        第 1 副本写客户端本节点（或随机），第 2 副本放到<strong>另一机架</strong>，第 3 副本与第 2 副本<strong>同机架不同节点</strong>——
+        在“整个机架掉电”与“跨机架网络带宽”之间取得平衡。DataNode 启动时通过拓扑脚本上报机架位置：</p>
+
+      <pre><code>&lt;!-- core-site.xml：机架感知脚本（返回形如 /rack01 的机架路径） --&gt;
+&lt;property&gt;
+  &lt;name&gt;net.topology.script.file.name&lt;/name&gt;
+  &lt;value&gt;/etc/hadoop/conf/rack-topology.sh&lt;/value&gt;
+&lt;/property&gt;</code></pre>
+
+      <h3>关键参数</h3>
+      <pre><code>&lt;!-- hdfs-site.xml：与湖仓负载最相关的参数 --&gt;
+&lt;property&gt;
+  &lt;name&gt;dfs.replication&lt;/name&gt;
+  &lt;value&gt;3&lt;/value&gt;                    <span class="comment">&lt;!-- 生产默认 3；归档冷表可降 2 或转纠删码 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;dfs.blocksize&lt;/name&gt;
+  &lt;value&gt;268435456&lt;/value&gt;            <span class="comment">&lt;!-- 256MB：湖仓大文件顺序扫描，减少块数与 NN 压力 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;dfs.namenode.handler.count&lt;/name&gt;
+  &lt;value&gt;64&lt;/value&gt;                   <span class="comment">&lt;!-- RPC 服务线程，重负载/多引擎并发时加大 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;dfs.datanode.failed.volumes.tolerated&lt;/name&gt;
+  &lt;value&gt;1&lt;/value&gt;                    <span class="comment">&lt;!-- 允许 1 块盘损坏不掉节点 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;dfs.client.read.shortcircuit&lt;/name&gt;
+  &lt;value&gt;true&lt;/value&gt;                <span class="comment">&lt;!-- 计算与存储同置时启用短路读，绕过 TCP --&gt;</span>
+&lt;/property&gt;</code></pre>
+
+      <div class="callout">
+        <strong>适用场景</strong>：自建机房且计算存储同置追求极致吞吐（短路读 + 本地副本优先）、已有 Hadoop 生态与运维体系、
+          对数据主权要求高无法上公有云。反之，公有云上优先对象存储，多云/混合架构则用 MinIO 对齐 S3 协议。
+      </div>
+      <div class="callout-warn">
+        <strong>HDFS 小文件是 NameNode 的内存杀手</strong>：1 亿个小文件即可能吃掉数十 GB 堆内存并让启动回放 EditLog 长达小时级。
+          湖仓表写入务必控制 <code>target-file-size-bytes</code>，并对历史小文件执行 compaction 合并。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="object-storage">S3/MinIO 对象存储</h2>
+      <p>对象存储把“文件系统”简化为“键值空间”：key 即路径，value 即不可变对象。它用极简的语义换取了近乎无限的扩展性与极低成本，
+        但也正是这层“简化”，逼出了 Iceberg 元数据协议的设计。</p>
+
+      <h3>对象存储 vs HDFS</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>HDFS</th>
+            <th>S3 / MinIO 对象存储</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>成本</td>
+            <td>3 副本 ×1 容量 = 3 倍占用，含硬件折旧与专人运维</td>
+            <td>纠删码约 1.2–1.5 倍冗余；公有云按量计费、可生命周期转冷归档</td>
+          </tr>
+          <tr>
+            <td>扩展性</td>
+            <td>受 NameNode 内存上限制约（亿级对象需 Federation）</td>
+            <td>去中心化，近无限；扩容只是加节点/加盘</td>
+          </tr>
+          <tr>
+            <td>读性能</td>
+            <td>顺序/随机均好，短路读可达本地盘水平</td>
+            <td>首字节延迟高（几十~几百 ms），顺序吞吐大对象后可跑满带宽</td>
+          </tr>
+          <tr>
+            <td>一致性 / 原子性</td>
+            <td>rename 原子、目录原子可见，经典 Hive 提交依赖它</td>
+            <td>单对象 PUT 强一致；<strong>无原子 rename</strong>，LIST 非快照语义</td>
+          </tr>
+          <tr>
+            <td>运维</td>
+            <td>机架规划、坏盘更换、NN HA 自担</td>
+            <td>S3 全托管；MinIO 轻量自运维</td>
+          </tr>
+          <tr>
+            <td>湖仓适配</td>
+            <td>传统 Hadoop 生态良好</td>
+            <td>Iceberg/Delta/Hudi 均原生适配，是湖仓事实标准底座</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>S3 的一致性短板与 Iceberg 的规避方式</h3>
+      <p>经典的 Hive 提交协议是“写临时目录 → 原子 rename 到正式路径”。在 S3 上这条路径全面失效：</p>
+      <ul>
+        <li><strong>rename = COPY + DELETE</strong>，非原子且昂贵（GB 级目录重命名要以小时计）；</li>
+        <li><strong>LIST 不是快照</strong>：分页枚举期间桶内在变化，无法作为“提交完成”的判定依据；</li>
+        <li>提交一半失败会留下“半张表”，读取方无从分辨。</li>
+      </ul>
+      <p>Iceberg 的规避方式恰恰是把<strong>提交从“动数据”改为“动指针”</strong>：</p>
+      <ol>
+        <li>数据文件以分布式唯一 ID 命名，<strong>直接写入最终目录</strong>，永不重命名；文件不可变，先写后登记天然安全；</li>
+        <li>提交时生成新的 manifest 与 snapshot，最后<strong>原子 PUT 一个新的 metadata.json</strong>
+          （S3 单对象写是强一致的），或通过 HMS/JDBC/REST Catalog 的乐观锁切换指针；</li>
+        <li>读取方从 Catalog 拿到确定的 metadata.json 入口，<strong>完全不需要 LIST 目录</strong>，也不依赖 rename；</li>
+        <li>失败提交残留的“孤儿文件”由 <code>remove_orphan_files</code> 定期回收，不影响正确性。</li>
+      </ol>
+
+      <h3>S3A Commiter 配置</h3>
+      <p>当 Spark 以原生 DataSource 方式（非 Iceberg 表）直接写 Parquet 到 S3 时，仍需 S3A 提交器来避免
+        “_temporary 目录 + rename 提交”陷阱。Iceberg 表自身不需要 rename，但集群级配置通常一并开启：</p>
+      <pre><code># spark-defaults.conf：magic committer（零 rename，通过隐藏目录 + _SUCCESS 标记提交）
+spark.hadoop.fs.s3a.committer.name=magic
+spark.hadoop.fs.s3a.committer.magic.enabled=true
+spark.hadoop.mapreduce.outputcommitter.factory.scheme.s3a=org.apache.hadoop.fs.s3a.commit.magic.MagicCommitterFactory
+spark.sql.sources.commitProtocolClass=org.apache.spark.sql.execution.datasources.SQLHadoopMapReduceCommitProtocol
+
+# 或 directory committer（任务直接写目标目录，driver 最后汇总提交）
+spark.hadoop.fs.s3a.committer.name=directory
+spark.hadoop.fs.s3a.committer.directory.summary=true
+spark.hadoop.mapreduce.outputcommitter.factory.scheme.s3a=org.apache.hadoop.fs.s3a.commit.directory.DirectoryCommitterFactory
+
+# 大表写入吞吐：分块并行上传与连接池
+spark.hadoop.fs.s3a.fast.upload=true
+spark.hadoop.fs.s3a.threads.max=32
+spark.hadoop.fs.s3a.connection.maximum=200
+spark.hadoop.fs.s3a.block.size=64M          <span class="comment"># 分块上传块大小</span></code></pre>
+
+      <h3>MinIO：私有化的 S3</h3>
+      <p>MinIO 以 S3 兼容 API + 纠删码（Erasure Coding）+ Bitrot 校验著称，是私有机房/边缘环境落湖仓的首选底座。</p>
+      <pre><code># 单机体验：一条命令拉起对象存储 + Web 控制台
+docker run -d --name minio \
+  -p 9000:9000 -p 9001:9001 \
+  -v /data/minio:/data \
+  -e MINIO_ROOT_USER=lakehouse \
+  -e MINIO_ROOT_PASSWORD='Lakehouse#2026' \
+  minio/minio server /data --console-address ":9001"
+
+# 生产分布式：4 节点 x 4 盘纠删码（分布式模式至少 4 节点）
+# 在每个节点执行相同命令，主机名用 {1...4} 展开语法
+export MINIO_ROOT_USER=lakehouse
+export MINIO_ROOT_PASSWORD='Lakehouse#2026'
+minio server http://minio{1...4}.lakehouse.local/data{1...4}</code></pre>
+      <ul>
+        <li><strong>纠删码</strong>：默认 EC:4（4 数据 + 4 校验），空间利用率远高于 3 副本，可按桶调整；</li>
+        <li><strong>部署要点</strong>：节点间时间同步（NTP）必须严格；生产建议 TLS 与独立域名；分布式模式扩容需按“纠删组”整组扩展；</li>
+        <li><strong>定位</strong>：与公有云 S3 协议对齐后，开发测试用 MinIO、生产上 S3 的迁移基本只改 endpoint 与凭证。</li>
+      </ul>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：统一用 <code>s3a://</code> scheme + path-style access 访问 MinIO；
+          引擎侧 endpoint / AK / SK 全部走配置中心或环境变量，严禁写死在 SQL 与代码仓库里（防止凭证泄漏进 Git）。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="hms">Hive Metastore 元数据服务</h2>
+      <p>湖仓多引擎的“表清单”需要一个中立裁判：Spark、Flink、Trino、Doris 各自的 catalog 互不相通，
+        Hive Metastore（HMS）以 Thrift 服务的形式提供了跨引擎的<strong>共享目录</strong>——谁都能问它“库表清单、schema、存储位置”。</p>
+
+      <h3>多引擎共享元数据</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>引擎</th>
+            <th>接入方式（示例）</th>
+            <th>典型用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Spark</td>
+            <td><code>spark.sql.catalog.lakehouse.type=hive</code></td>
+            <td>批处理读写 Iceberg 表，元数据与 Flink/Trino 完全一致</td>
+          </tr>
+          <tr>
+            <td>Flink</td>
+            <td><code>CREATE CATALOG ... 'catalog-type'='hive'</code></td>
+            <td>流式写入/增量消费同一批表</td>
+          </tr>
+          <tr>
+            <td>Trino</td>
+            <td>iceberg.properties：<code>iceberg.catalog.type=hive_metastore</code></td>
+            <td>交互式联邦查询，直读 Parquet</td>
+          </tr>
+          <tr>
+            <td>Doris / StarRocks</td>
+            <td><code>CREATE EXTERNAL CATALOG ... TYPE=iceberg</code></td>
+            <td>湖上极速查询与湖仓联邦</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>能力边界：HMS 只管“户口本”</h3>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>HMS 有什么</strong>：库/表/分区清单、列 schema、存储 location、SerDe 参数等静态描述信息，
+          外加基于心跳的粗粒度锁接口。
+        </div>
+        <div class="callout-warn">
+          <strong>HMS 没有什么</strong>：没有事务日志、没有快照链、没有表级统计信息。Iceberg 表在 HMS 里只是
+          “一个指向 metadata.json 的指针”，ACID 与时间旅行完全由表格式自身的元数据文件实现——
+          <strong>引擎绝不能只看 HMS 的表结构就断定数据状态</strong>。
+        </div>
+      </div>
+
+      <h3>关键配置</h3>
+      <pre><code>&lt;!-- hive-site.xml：Metastore 服务端核心参数 --&gt;
+&lt;property&gt;
+  &lt;name&gt;hive.metastore.uris&lt;/name&gt;
+  &lt;value&gt;thrift://hms1.lakehouse.local:9083,thrift://hms2.lakehouse.local:9083&lt;/value&gt;
+  <span class="comment">&lt;!-- 客户端可配多个地址轮询容灾 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;hive.metastore.server.max.threads&lt;/name&gt;
+  &lt;value&gt;200&lt;/value&gt;                <span class="comment">&lt;!-- 多引擎高并发时的 RPC 线程池 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;hive.metastore.pool.max.active&lt;/name&gt;
+  &lt;value&gt;32&lt;/value&gt;                 <span class="comment">&lt;!-- 底层 JDBC 连接池上限 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;hive.metastore.metrics.enabled&lt;/name&gt;
+  &lt;value&gt;true&lt;/value&gt;              <span class="comment">&lt;!-- 暴露 RPC/JMX 指标，接入监控 --&gt;</span>
+&lt;/property&gt;</code></pre>
+
+      <h3>HMS 瓶颈与解耦建议</h3>
+      <ul>
+        <li><strong>瓶颈表现</strong>：所有引擎的 DDL 与首查都要过 HMS，高峰期 RPC 排队；Thrift 单实例能力有限，
+          底层数据库连接池打满后表现为“建表/查询 list 偶发超时”。</li>
+        <li><strong>解耦路径一：Catalog 多实例</strong>：HMS 无状态化部署多实例（共享后端数据库）+ 负载均衡，按引擎划分访问组。</li>
+        <li><strong>解耦路径二：换更轻的 Catalog</strong>：Iceberg 支持 JDBC Catalog（元数据表放 PostgreSQL/MySQL）、
+          REST Catalog（Nessie / Polaris / Gravitino 等），把“表清单”从 Hadoop 体系解放出来：</li>
+      </ul>
+      <pre><code># Spark 挂载 Iceberg JDBC Catalog：不再依赖 HMS
+spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog
+spark.sql.catalog.lakehouse.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog
+spark.sql.catalog.lakehouse.uri=jdbc:postgresql://pg.lakehouse.local:5432/iceberg
+spark.sql.catalog.lakehouse.jdbc.user=iceberg
+spark.sql.catalog.lakehouse.jdbc.password=******
+spark.sql.catalog.lakehouse.warehouse=s3a://lakehouse/warehouse</code></pre>
+      <div class="callout-best">
+        <strong>生产经验</strong>：存量 HMS 不必推倒重建。推荐演进路线：新湖仓区用 REST/JDBC Catalog 承接增量表，
+          老表继续经 HMS 访问，两边通过同一套 warehouse 路径规范兼容；等 Iceberg REST Catalog 标准稳定后再统一收口。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="tuning">存储层调优要点</h2>
+      <p>存储层的性能问题 90% 落在四个字上：<strong>小文件、坏布局</strong>。以下四项是投产前必须规划的内容。</p>
+
+      <h3>1. 文件大小规划</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>平均文件大小</th>
+            <th>典型后果</th>
+            <th>处置</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>&lt; 32MB</td>
+            <td>planning 变慢、对象存储请求放大、NameNode 内存膨胀</td>
+            <td>调大 <code>write.target-file-size-bytes</code>；开启 <code>write.distribution-mode=hash</code>；执行 compaction</td>
+          </tr>
+          <tr>
+            <td>128MB–512MB</td>
+            <td>对象存储/列存扫过的黄金区间</td>
+            <td>维持：目标 256MB，配合 128MB 行组</td>
+          </tr>
+          <tr>
+            <td>&gt; 1GB</td>
+            <td>单文件读取时间过长，任务尾部拖死；细粒度裁剪失效</td>
+            <td>调小 target；重写时按排序键拆分</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2. Parquet 行组与压缩</h3>
+      <pre><code>-- 行组：列存的最小读取单元，建议 128MB–256MB，与扫描列宽匹配
+ALTER TABLE lakehouse.dws_orders SET TBLPROPERTIES (
+  'write.parquet.compression-codec'    = 'zstd',        <span class="comment">-- 压缩比与解压速度的平衡点</span>
+  'write.parquet.compression-level'    = '3',           <span class="comment">-- 1-22，越大越慢但更省</span>
+  'write.parquet.row-group-size-bytes' = '268435456',
+  'write.parquet.page-size-bytes'      = '1048576'      <span class="comment">-- 页是编码/统计最小单元</span>
+);</code></pre>
+      <ul>
+        <li>宽表点查场景（只取少数列）可适当减小行组，让“读到的无用数据”更少；</li>
+        <li><code>snappy</code> 解压最快、<code>zstd</code> 综合最优、<code>gzip</code> 只用于超冷归档；</li>
+        <li>查询侧确保 <code>spark.sql.parquet.filterPushdown=true</code>（默认开），让 min/max 谓词下推到行组。</li>
+      </ul>
+
+      <h3>3. 分区设计原则</h3>
+      <ol>
+        <li><strong>用天然高频过滤列</strong>：分区列必须出现在绝大多数查询的 WHERE 中，否则分区只是负担；</li>
+        <li><strong>基数适中</strong>：单表分区数建议控制在数千到数万级；按天分区足够就不要按小时；</li>
+        <li><strong>优先隐藏分区 transform</strong>：<code>days(ts)</code> / <code>months(ts)</code> / <code>bucket(64, user_id)</code>，
+          免冗余列、免手工指定；</li>
+        <li><strong>预估文件数</strong>：每日写入文件数 ≈ 分区数 × 每分区写入任务数，反推 target-file-size 是否合理。</li>
+      </ol>
+
+      <h3>4. 元数据爆炸治理</h3>
+      <p>流式写入 = 高频提交 = 快照与 manifest 指数级累积。治理三件套必须进调度系统：</p>
+      <pre><code>-- ① 快照过期：只保留最近 7 天 + 至少 100 个快照
+CALL lakehouse.system.expire_snapshots(
+  table =&gt; 'lakehouse.dws_orders',
+  older_than =&gt; TIMESTAMP '2026-10-29 00:00:00',
+  retain_last =&gt; 100
+);
+
+-- ② manifest 合并：大量小 manifest 会拖慢 planning
+CALL lakehouse.system.rewrite_manifests(
+  table =&gt; 'lakehouse.dws_orders'
+);
+
+-- ③ 孤儿文件清理：回收失败提交残留（低峰期执行，需引擎独占写）
+CALL lakehouse.system.remove_orphan_files(
+  table =&gt; 'lakehouse.dws_orders',
+  older_than =&gt; TIMESTAMP '2026-11-04 00:00:00'
+);</code></pre>
+      <p>配合表属性做“写入时自愈”，避免依赖人工：</p>
+      <pre><code>ALTER TABLE lakehouse.dws_orders SET TBLPROPERTIES (
+  'write.metadata.previous-versions-max'       = '100',   <span class="comment">-- metadata.json 最多留 100 版</span>
+  'write.metadata.delete-after-commit.enabled' = 'true',  <span class="comment">-- 提交后自动删过期入口文件</span>
+  'write.metadata.metrics.default'             = 'truncate(16)', <span class="comment">-- 长字符串统计截断，瘦身 manifest</span>
+  'commit.manifest.target-size-bytes'          = '8388608',     <span class="comment">-- manifest 自动合并目标 8MB</span>
+  'commit.manifest.min-count-to-merge'         = '100'
+);</code></pre>
+
+      <div class="callout-best">
+        <strong>生产经验总结</strong>：
+          目标文件 256MB + 行组 128MB + zstd；分区用 days() 且单表 ≤ 1 万个分区；
+          流表快照保留 7 天、离线表 30 天；compaction / expire / rewrite_manifests / remove_orphan_files
+          四个维护动作全部进调度并在低峰执行；上线前先用真实流量做一周“文件数与 planning 耗时”观测，再定稿参数。
+      </div>
+
+      <!-- ================================================= -->
+      <h2 id="boundary">适用边界</h2>
+      <p>湖仓表不是银弹。以下场景，传统数仓或 OLAP 引擎原生表依然是更优解：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>场景特征</th>
+            <th>推荐方案</th>
+            <th>原因</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>毫秒~百毫秒级点查、高 QPS 在线服务</td>
+            <td>ClickHouse / HBase / Redis</td>
+            <td>对象存储首字节延迟 + planning 开销无法满足在线 SLA</td>
+          </tr>
+          <tr>
+            <td>秒级频繁小事务更新且要求即时可见</td>
+            <td>数仓原生表（如 Doris 内表）</td>
+            <td>Iceberg 提交成本（新 manifest/snapshot）决定高频微批不经济</td>
+          </tr>
+          <tr>
+            <td>超高并发低延迟聚合（实时大屏）</td>
+            <td>ClickHouse / Doris / StarRocks 内表</td>
+            <td>预聚合 + 向量化执行 + 索引，湖仓表按需扫描天然吃亏</td>
+          </tr>
+          <tr>
+            <td>GB 级以下小数据集、强事务 OLTP</td>
+            <td>MySQL / PostgreSQL</td>
+            <td>事务与并发控制能力完全不同层级</td>
+          </tr>
+          <tr>
+            <td>PB 级批处理、机器学习训练、多引擎共享</td>
+            <td><strong>湖仓表（Iceberg）</strong></td>
+            <td>开放格式 + 存算分离 + 时间旅行的主场</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>一个实用的判断口诀：<strong>“给机器反复扫的，放湖仓；给人实时看的，放 OLAP；给业务改的，放 OLTP”</strong>。
+        湖仓与这些引擎之间再通过联邦查询（见查询层一章）打通，形成互补贴而非互替代的组合。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>下一站：计算引擎层</h3>
+          <p>存储层就绪后，学习 Spark 与 Flink 如何共享 Iceberg 表实现批流一体写入与调优。</p>
+          <a class="card-link" href="compute.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>配套：查询层</h3>
+          <p>Trino / Doris 如何联邦查询湖仓表，补齐交互式分析能力。</p>
+          <a class="card-link" href="query.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>回顾：总体架构</h3>
+          <p>回到全局视角，检视存储层在湖仓十大组件中的位置与依赖关系。</p>
+          <a class="card-link" href="architecture.html">返回复习 →</a>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>小结</strong>：对象存储给湖仓以<strong>规模与成本</strong>，开放表格式给湖仓以<strong>表语义与事务</strong>，
+          元数据服务给湖仓以<strong>共享目录</strong>。三者各司其职、只靠开放协议衔接——这是湖仓一切上层能力的地基。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚 ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

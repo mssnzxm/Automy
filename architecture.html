@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>湖仓一体总体架构 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧"本页导航"目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#what">湖仓一体是什么</a>
+      <a href="#layers">六层参考架构</a>
+      <a href="#batch-stream">批流一体设计</a>
+      <a href="#palantir">支撑 Palantir 式数据体系</a>
+      <a href="#selection">技术选型方法论</a>
+      <a href="#related">相关章节</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">湖仓一体总体架构</h1>
+      <div class="page-intro">
+        本页是全站总纲：先讲清湖仓一体「是什么、为什么、怎么分层」，给出六层参考架构与全景架构图；再深入批流一体的设计思路；然后看湖仓底座如何支撑 Palantir 式的本体、流水线、AI 检索与时空分析场景；最后沉淀一套可直接落地的技术选型方法论。读完本页，你将拥有贯穿后续所有章节的全局地图。
+      </div>
+
+      <!-- ================= 一、湖仓一体是什么 ================= -->
+      <h2 id="what">湖仓一体是什么</h2>
+      <p><strong>湖仓一体（Lakehouse）</strong>是在低成本对象存储之上，通过开放表格式（Iceberg / Hudi / Delta）实现 ACID 事务、Schema 治理与多引擎并发访问的新型数据平台架构。它保留了数据湖「海量、廉价、存原始数据」的底色，又把数据仓库数十年沉淀的事务与治理能力下沉到表格式层，用一份存储同时服务离线、实时、AI 与检索等全部负载。</p>
+      <p>
+        <span class="pill">开放表格式</span>
+        <span class="pill">对象存储</span>
+        <span class="pill">ACID</span>
+        <span class="pill">多引擎共享</span>
+      </p>
+
+      <h3>从三代演进看湖仓的必然</h3>
+      <div class="arch-layer">数据仓库时代（1990s–2015）：写时 Schema · 强治理 · 贵且封闭</div>
+      <p>数仓以「先建模、后装载」为核心：结构在写入时即被约束，质量与一致性极佳，报表生态成熟。但商业数据库按容量计费，扩容成本陡峭；封闭格式让数据「进得去、出不来」，ML 与探索类负载既贵又慢。</p>
+      <div class="arch-layer">数据湖时代（2015–2020）：读时 Schema · 海量廉价 · 治理缺位</div>
+      <p>HDFS 与对象存储把每 GB 成本压到分级别，原始数据先落地、结构后解析，完美适配机器学习。但湖本质是文件目录：没有 ACID、没有并发控制、没有 Schema 约束，「数据沼泽」开始出现，企业不得不再建一套仓来救湖。</p>
+      <div class="arch-layer">湖仓一体时代（2020–）：表格式承担治理 · 湖上建仓 · 一份数据</div>
+      <p>Iceberg 等开放表格式把元数据（schema、分区、快照）从引擎私有目录中解放出来，变成存储之上的「公共合同」：任何引擎按协议读写即可获得事务与演进能力。治理不再是仓的专属，湖第一次拥有了数据库级别的可靠性。</p>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：湖仓一体 ≠ 把数据扔进对象存储。没有表格式层，并发写入互相覆盖、小文件拖垮扫描、Schema 漂移无人兜底——缺了事务与元数据管理这一层，就谈不上「湖仓」，只是换了个目录放文件。
+      </div>
+
+      <h3>三大核心价值</h3>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>一份数据多引擎共享</strong>：Spark、Flink、Trino、Doris 通过统一 Catalog 读写同一张表。数据零搬运意味着零口径漂移、零重复存储成本，新引擎接入只需对接开放协议。
+        </div>
+        <div class="callout">
+          <strong>ACID 事务保障</strong>：表格式以快照（snapshot）为单位提交变更，写入失败不污染数据；读写基于快照隔离，流式写入与批式回刷、交互查询可以安全并发。
+        </div>
+        <div class="callout">
+          <strong>开放表格式解耦</strong>：元数据规范公开、文件格式标准（Parquet/ORC），存储、计算、查询可独立升级替换。厂商绑定的历史难题在存储层被结构性化解——这正是「架构师选型底气」的来源。
+        </div>
+      </div>
+
+      <p>下面这段配置展示了「多引擎共享」的落地面貌：三个引擎各写一份配置，却指向<strong>同一套元数据与数据文件</strong>：</p>
+      <pre><code><span class="comment"># Trino catalog：etc/catalog/lakehouse.properties（挂载 Iceberg + Hive Metastore）</span>
+connector.name=iceberg
+iceberg.catalog.type=hive_metastore
+hive.metastore.uri=thrift://metastore.lake.local:9083
+s3.endpoint=http://minio.lake.local:9000
+s3.path-style-access=true
+
+<span class="comment"># Spark：同样指向这套元数据，无需任何数据导出或同步任务</span>
+spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog
+spark.sql.catalog.lakehouse.type=hive
+spark.sql.catalog.lakehouse.uri=thrift://metastore.lake.local:9083
+spark.sql.catalog.lakehouse.warehouse=s3://lakehouse/wh
+
+<span class="comment"># Flink：批与流共享同一份元数据与数据文件，分钟级写入对批读可见</span>
+sql.catalog.lakehouse.type=iceberg
+catalog.lakehouse.type=hive
+catalog.lakehouse.uri=thrift://metastore.lake.local:9083
+catalog.lakehouse.warehouse=s3://lakehouse/wh</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：把「统一 Metastore + 统一 Warehouse 路径 + 统一 Kerberos/ Ranger 权限」写进平台规范并纳入评审——湖仓的解耦红利只有在「三统一」被严格执行时才能真正兑现。
+      </div>
+
+      <!-- ================= 二、六层参考架构 ================= -->
+      <h2 id="layers">六层参考架构</h2>
+      <p>本站全站结构都映射到这套六层参考架构。<strong>自上而下</strong>依次是：场景消费层 → 可观测性层 → 调度与资源层 → 计算与查询层 → 数据集成层 → 存储与表格式层。数据则<strong>自下而上</strong>流动：先落底座，再被加工、查询，最终在场景层产生业务价值。</p>
+
+      <div class="arch-layer">场景消费层：情报研判 / AI 向量检索 / 时序分析 / GIS 空间分析 / 图计算</div>
+      <p>业务价值的出口层，回答「平台最终为谁创造什么」。情报研判需要多源关联与图谱展开；AI 向量检索需要非结构化数据入湖与特征回填；时序与 GIS 需要专用索引。该层对下的核心诉求是<strong>统一的语义入口</strong>（视图/语义层）与<strong>细粒度权限</strong>——业务方只应面向「对象与指标」编程，而非面向底层表。对应章节：<a href="scenarios.html">场景实战</a>。</p>
+
+      <div class="arch-layer">可观测性层：Prometheus / Grafana / EFK（指标 · 日志 · 告警）</div>
+      <p>平台的「体检系统」。Prometheus 周期抓取 Spark、Flink、Trino、Iceberg 与 YARN 的指标暴露端口；EFK 汇聚各组件与业务日志；Grafana 出大盘；告警规则联动值班与调度层的失败重试。它向上承接调度层的任务级异常，向下覆盖所有组件的节点级异常，是「故障在业务感知之前被发现」的保障。对应章节：<a href="observability.html">可观测</a>。</p>
+
+      <div class="arch-layer">调度与资源层：DolphinScheduler / YARN（DAG 编排 · 多租户配额）</div>
+      <p>平台的「神经系统」。DolphinScheduler 负责任务 DAG：依赖编排、定时触发、补数重跑、失败告警；YARN 负责资源：队列划分、CPU/内存配额、弹性调度。它把计算层成百上千的作业组织成可信的生产流水线，并把集群资源公平地分配给多租户。对应章节：<a href="scheduling.html">调度资源</a>。</p>
+
+      <div class="arch-layer">计算与查询层：Spark / Flink / Trino / Doris / ClickHouse</div>
+      <p>湖仓的「双引擎矩阵」。Spark 承接大规模离线加工与 ML 训练；Flink 承接实时计算与 CDC 流式入湖；Trino 提供交互式联邦查询；Doris 服务实时多维 OLAP；ClickHouse 专攻日志与时序扫描。它们对上满足场景层的算力需求，对下通过统一 Catalog 读写同一份 Iceberg 数据——引擎之间是「分工」而非「搬运」。对应章节：<a href="compute.html">计算层</a>、<a href="query.html">查询层</a>。</p>
+
+      <div class="arch-layer">数据集成层：Kafka / Flink CDC / DataX / SeaTunnel</div>
+      <p>数据的「入湖口」。Kafka 缓冲高吞吐消息流并支持重放；Flink CDC 直连业务库订阅 binlog 实现增量入湖；DataX/SeaTunnel 承接异构批量同步。该层对上把数据交给计算层加工或直接落地表格式，对下把 Parquet 文件写入对象存储并在 Metastore 注册元数据——集成层的稳定与时效决定了整个平台的「数据鲜度」。对应章节：<a href="integration.html">数据集成</a>。</p>
+
+      <div class="arch-layer">存储与表格式层：HDFS / S3·MinIO + Parquet + Iceberg + Hive Metastore</div>
+      <p>全平台<strong>唯一可信底座</strong>。对象存储（HDFS 或 MinIO 兼容 S3）提供廉价、高可用的文件底座；Parquet 提供高压缩比列存布局；Iceberg 在文件之上维护元数据树并提供快照、ACID、Schema 演进与隐藏分区；Hive Metastore 作为统一元数据中心被所有引擎共享。所有上层组件都经由开放协议访问它——这是「换引擎不搬数据」的根本保证。对应章节：<a href="storage.html">存储层</a>。</p>
+
+      <p>六层全景与层间数据流如下（箭头方向表示数据自下而上流动）：</p>
+      <div class="diagram">
+        <svg width="640" height="550" viewBox="0 0 640 550" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="湖仓一体六层参考架构全景图">
+          <rect x="100" y="10" width="440" height="60" rx="8" fill="#134e4a"></rect>
+          <text x="320" y="35" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="bold">场景消费层</text>
+          <text x="320" y="56" text-anchor="middle" fill="#99f6e4" font-size="12">情报研判 · AI 向量检索 · 时序分析 · GIS 空间分析 · 图计算</text>
+          <line x1="320" y1="98" x2="320" y2="78" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="312,79 328,79 320,71" fill="#94a3b8"></polygon>
+          <rect x="100" y="100" width="440" height="60" rx="8" fill="#0f766e"></rect>
+          <text x="320" y="125" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="bold">可观测性层</text>
+          <text x="320" y="146" text-anchor="middle" fill="#99f6e4" font-size="12">Prometheus · Grafana · EFK（指标 · 日志 · 告警）</text>
+          <line x1="320" y1="188" x2="320" y2="168" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="312,169 328,169 320,161" fill="#94a3b8"></polygon>
+          <rect x="100" y="190" width="440" height="60" rx="8" fill="#0d9488"></rect>
+          <text x="320" y="215" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="bold">调度与资源层</text>
+          <text x="320" y="236" text-anchor="middle" fill="#ccfbf1" font-size="12">DolphinScheduler · YARN（DAG 编排 · 多租户配额）</text>
+          <line x1="320" y1="278" x2="320" y2="258" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="312,259 328,259 320,251" fill="#94a3b8"></polygon>
+          <rect x="100" y="280" width="440" height="60" rx="8" fill="#0f766e"></rect>
+          <text x="320" y="305" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="bold">计算与查询层</text>
+          <text x="320" y="326" text-anchor="middle" fill="#99f6e4" font-size="12">Spark · Flink · Trino · Doris · ClickHouse</text>
+          <line x1="320" y1="368" x2="320" y2="348" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="312,349 328,349 320,341" fill="#94a3b8"></polygon>
+          <rect x="100" y="370" width="440" height="60" rx="8" fill="#0d9488"></rect>
+          <text x="320" y="395" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="bold">数据集成层</text>
+          <text x="320" y="416" text-anchor="middle" fill="#ccfbf1" font-size="12">Kafka · Flink CDC · DataX · SeaTunnel</text>
+          <line x1="320" y1="458" x2="320" y2="438" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="312,439 328,439 320,431" fill="#94a3b8"></polygon>
+          <rect x="100" y="460" width="440" height="60" rx="8" fill="#134e4a"></rect>
+          <text x="320" y="485" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="bold">存储与表格式层</text>
+          <text x="320" y="506" text-anchor="middle" fill="#99f6e4" font-size="12">HDFS / S3·MinIO · Parquet + Iceberg · Hive Metastore</text>
+          <text x="320" y="538" text-anchor="middle" fill="#64748b" font-size="12">数据自下而上流动：底座 → 入湖 → 计算/查询 → 调度与可观测保障 → 场景消费</text>
+        </svg>
+      </div>
+
+      <div class="callout">
+        <strong>分层的意义在于「可替换」</strong>：六层之间只以开放接口衔接（SQL、REST、指标暴露协议），任何一层组件被替换都不应引发数据迁移——这是评审一个湖仓架构是否健康的金标准。
+      </div>
+
+      <!-- ================= 三、批流一体设计 ================= -->
+      <h2 id="batch-stream">批流一体设计</h2>
+      <p>「批还是流」是流式计算十几年的路线之争。Lambda 与 Kappa 给出了两代经典答案，而湖仓时代在<strong>存储层</strong>给出了第三种：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Lambda 架构</th>
+            <th>Kappa 架构</th>
+            <th>湖仓批流一体</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>架构形态</td>
+            <td>批、流双链路，serving 层合并结果</td>
+            <td>单一流式链路，重放日志重算</td>
+            <td>批与流写同一张表格式表</td>
+          </tr>
+          <tr>
+            <td>代码与口径</td>
+            <td>两套代码，口径易漂移</td>
+            <td>一套代码，天然一致</td>
+            <td>一套 Schema，口径由表统一</td>
+          </tr>
+          <tr>
+            <td>历史回溯</td>
+            <td>批链路天然支持</td>
+            <td>受 Kafka 日志保留期约束</td>
+            <td>任意快照回溯 + 分区回刷</td>
+          </tr>
+          <tr>
+            <td>资源与复杂度</td>
+            <td>双倍开发运维成本</td>
+            <td>链路简单，重算耗资源</td>
+            <td>与 Kappa 相当，存储统一</td>
+          </tr>
+          <tr>
+            <td>时效上限</td>
+            <td>流侧秒级、批侧 T+1</td>
+            <td>全程准实时</td>
+            <td>分钟级流写，批读即时可见</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>超大规模历史 + 强审计</td>
+            <td>中等规模 + 高时效</td>
+            <td>绝大多数企业数据平台</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>湖仓时代批流一体的核心思路：<strong>不再在引擎层强行统一批与流，而是在存储层用 Iceberg 作为批与流的共同落地形态</strong>——Flink 以小文件 + 快照提交的方式流式写入，数据在分钟级对批侧可见；Spark / Trino 基于快照批量读取与回刷；compaction 周期任务收敛小文件。两条链路并行运行、互相独立，却在同一张表上自然汇合：</p>
+
+      <div class="grid-2">
+        <div>
+          <h3>流式链路（分钟级）</h3>
+          <p>业务库 binlog 经 Flink CDC 进 Kafka，再由 Flink SQL 持续写入 Iceberg，checkpoint 即快照提交。</p>
+          <pre><code><span class="comment">-- 链路：MySQL --Flink CDC--&gt; Kafka --Flink SQL--&gt; Iceberg</span>
+CREATE TABLE orders_binlog (
+  order_id   STRING,
+  user_id    STRING,
+  pay_amount DECIMAL(12, 2),
+  order_time TIMESTAMP(3),
+  PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+  'connector'        = 'mysql-cdc',
+  'hostname'         = 'mysql-biz.local',
+  'database-name'    = 'trade',
+  'table-name'       = 'orders',
+  'scan.startup.mode'= 'initial'  <span class="comment">-- 首次全量 + 持续增量</span>
+);
+
+INSERT INTO lakehouse.dwd_trade_orders
+SELECT order_id, user_id, pay_amount, order_time,
+       DATE_FORMAT(order_time, 'yyyy-MM-dd') AS dt
+FROM orders_binlog;</code></pre>
+        </div>
+        <div>
+          <h3>批式链路（T+1 回刷）</h3>
+          <p>Spark 每日重跑分区做对账与修正，Trino 直接查询最新数据——全程无数据搬运。</p>
+          <pre><code><span class="comment"># Spark：每日 T+1 重跑，与流式写入共享同一张表</span>
+spark-sql --master yarn --deploy-mode cluster \
+  --conf spark.sql.shuffle.partitions=800 \
+  -e "INSERT OVERWRITE lakehouse.dws_trade_city
+      PARTITION (dt = '2026-11-04')
+      SELECT city, SUM(pay_amount) FROM lakehouse.dwd_trade_orders
+      WHERE dt = '2026-11-04' GROUP BY city"
+
+<span class="comment">-- Trino：BI/分析师直接查询，无需等待导出</span>
+SELECT * FROM lakehouse.dws_trade_city
+WHERE dt = '2026-11-04';</code></pre>
+        </div>
+      </div>
+
+      <pre><code><span class="comment">-- 小文件治理是批流一体的运维生命线：流写高频提交，必须定期合并</span>
+CALL lakehouse.system.rewrite_data_files(
+  table   =&gt; 'lakehouse.dwd_trade_orders',
+  strategy =&gt; 'binpack',
+  options  =&gt; map('target-file-size-bytes', '134217728')
+);</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：把「Flink checkpoint 间隔」「Iceberg 目标文件大小」「compaction 触发阈值」三者作为一个整体参数组来调优——checkpoint 越短时效越好，但文件越小；compaction 频率要跟上写入速率，否则查询侧扫描代价会指数级上升。
+      </div>
+
+      <!-- ================= 四、支撑 Palantir 式数据体系 ================= -->
+      <h2 id="palantir">支撑 Palantir 式数据体系</h2>
+      <p>Palantir Foundry 证明了数据平台的终极形态不是「一堆表」，而是<strong>本体（Ontology）+ 流水线（Pipeline）+ 应用</strong>：把业务对象、关系与动作映射为数据之上的语义层，让决策直接在模型上发生。湖仓底座恰好为这套体系提供了全部四类基础能力：</p>
+      <ul>
+        <li><strong>本体建模（Ontology）</strong>：以对象—关系—动作三层语义抽象业务世界。底座需要提供统一元数据、主外键约束与血缘，让「对象」能稳定地映射到 Iceberg 实体表。详见<a href="governance.html">数据治理</a>。</li>
+        <li><strong>数据流水线（Pipeline）</strong>：本体背后是批流一体的加工链路。底座需要任务编排、断点重跑与数据鲜度保障——这正是 DolphinScheduler + Flink/Spark 的组合价值。详见<a href="scheduling.html">调度资源</a>。</li>
+        <li><strong>AI 检索</strong>：RAG 与推荐需要向量库与非结构化数据入湖。底座需要对象存储承载原始文档、计算层完成 embedding、向量库承载 ANN 检索，并把结果表回写湖仓统一服务。详见<a href="scenarios.html">场景实战</a>。</li>
+        <li><strong>时空分析</strong>：GIS 空间研判与时序监控要求底座支持空间索引、时间窗口与高压缩扫描，通常由 ClickHouse/时序引擎 + Parquet 列存协同完成。</li>
+      </ul>
+      <p>一个简化的本体定义（YAML 节选），可以直接架在湖仓的实体表之上：</p>
+      <pre><code><span class="comment"># 语义层本体定义示例（节选）：对象映射到 Iceberg 实体表</span>
+ontology:
+  object_types:
+    - name: SalesOrder                  <span class="comment"># 业务对象：销售订单</span>
+      primary_key: order_id
+      source_table: lakehouse.dwd_sales_order
+      attributes:
+        - { name: order_amount, type: decimal(12,2) }
+        - { name: customer_id,   type: string }
+        - { name: order_time,    type: timestamp }
+  link_types:
+    - name: PlacedBy                    <span class="comment"># 关系：订单 ← 下单客户</span>
+      source: SalesOrder
+      target: Customer
+      cardinality: many-to-one
+  actions:
+    - name: RefundOrder                 <span class="comment"># 动作：可回写业务系统</span>
+      input: [ order_id, reason ]
+      target_service: erp-refund-api</code></pre>
+      <p>四类上层场景对底座的能力要求汇总如下：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>上层场景</th>
+            <th>对湖仓底座的能力要求</th>
+            <th>主要承载组件</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>本体建模</td>
+            <td>统一元数据、主外键与血缘、细粒度权限、语义层视图</td>
+            <td>Iceberg + Hive Metastore + 治理体系</td>
+          </tr>
+          <tr>
+            <td>数据流水线</td>
+            <td>批流一体写入、DAG 编排、断点重跑、鲜度监控</td>
+            <td>Kafka + Flink + DolphinScheduler</td>
+          </tr>
+          <tr>
+            <td>AI 检索</td>
+            <td>非结构化存储、特征工程、向量索引与回写</td>
+            <td>MinIO + Spark + 向量库 + Trino 服务</td>
+          </tr>
+          <tr>
+            <td>时空分析</td>
+            <td>空间索引、时序窗口、高压缩扫描、GIS 函数</td>
+            <td>ClickHouse + Parquet + 专用查询引擎</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>提示</strong>：本体层是湖仓的「语义皮肤」——底座保证数据可信，本体保证数据可用。没有语义层的湖仓再快也只是「更快的报表工具」；这也是本站把场景消费层放在架构最顶端的原因。
+      </div>
+
+      <!-- ================= 五、技术选型方法论 ================= -->
+      <h2 id="selection">技术选型方法论</h2>
+      <p>湖仓组件多、迭代快，选型最容易犯两类错误：要么追新求全引入「全家桶」，要么保守扎堆堆叠历史包袱。以下五原则是评审任何湖仓选型方案的锚点：</p>
+      <ol>
+        <li><strong>开放标准优先</strong>：表格式与文件格式必须选开放标准（Iceberg / Parquet），确保数据与元数据不被任何单一引擎或厂商私有化——这是湖仓架构的「宪法条款」。</li>
+        <li><strong>一专多能</strong>：优先选择能同时覆盖多个场景的组件（如 Trino 既是联邦查询器又是即席分析引擎），把组件总数压到最小；每多一个组件就多一份运维成本。</li>
+        <li><strong>社区活跃度</strong>：看 commit 频率、issue 响应速度、版本发布节奏与中文资料密度；一个两年不发版的「明星项目」比一个默默迭代的工具更危险。</li>
+        <li><strong>运维成本</strong>：评估团队熟悉度、部署复杂度、监控暴露成熟度与故障处理手册；选「团队能驾驭的最优解」，而不是「纸面上的最强解」。</li>
+        <li><strong>国产化适配</strong>：DolphinScheduler、Doris、MinIO、SeaTunnel 等国产开源组件已在湖仓栈中占据主流，中文社区与信创环境适配是实打实的减分加分项。</li>
+      </ol>
+      <p>落到具体场景，本站的推荐组合如下（后续各章会给出完整的选型对比与理由）：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>典型场景</th>
+            <th>推荐组合</th>
+            <th>选型理由</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>实时入湖（CDC）</td>
+            <td>Flink CDC + Kafka + Iceberg</td>
+            <td>免手工同步、分钟级鲜度、可重放</td>
+          </tr>
+          <tr>
+            <td>离线批处理</td>
+            <td>Spark on YARN + Iceberg</td>
+            <td>生态最成熟、大规模 shuffle 稳定</td>
+          </tr>
+          <tr>
+            <td>交互式 / 联邦查询</td>
+            <td>Trino 或 Doris</td>
+            <td>秒级返回、多数据源联邦</td>
+          </tr>
+          <tr>
+            <td>日志 / 时序分析</td>
+            <td>ClickHouse + Kafka</td>
+            <td>高压缩列存、极致扫描吞吐</td>
+          </tr>
+          <tr>
+            <td>任务调度</td>
+            <td>DolphinScheduler</td>
+            <td>国产开源、DAG 可视化、多租户</td>
+          </tr>
+          <tr>
+            <td>对象存储</td>
+            <td>HDFS 或 MinIO（S3 协议）</td>
+            <td>低成本、标准接口、易扩容</td>
+          </tr>
+          <tr>
+            <td>指标与告警</td>
+            <td>Prometheus + Grafana</td>
+            <td>事实标准、生态最全</td>
+          </tr>
+          <tr>
+            <td>日志检索</td>
+            <td>EFK（Elasticsearch + Filebeat + Kibana）</td>
+            <td>全文检索强、采集端轻量</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout-warn">
+        <strong>警惕「全家桶」陷阱</strong>：同时引入 Iceberg + Hudi + Delta 三种表格式、四五种查询引擎再配多套调度，不是架构领先而是治理灾难。任何新组件的引入都必须回答：它替代了谁？不可替代的理由是什么？谁负责它的值班？
+      </div>
+      <div class="callout-best">
+        <strong>最佳实践</strong>：为每次选型写一页「决策记录」（ADR）：背景、备选方案、决策理由、否决理由、复评时间。三个月后回看 ADR，是校准团队选型品味最有效的训练方式。
+      </div>
+
+      <!-- ================= 六、相关章节 ================= -->
+      <h2 id="related">相关章节</h2>
+      <p>建立全局地图后，建议按「存储 → 计算 → 查询 → 集成」的顺序进入六层技术栈的细节学习：</p>
+      <div class="card-grid">
+        <div class="card">
+          <h3>存储层</h3>
+          <p>对象存储、Parquet 与 Iceberg 表格式的内部机制：快照、元数据树、隐藏分区与 compaction。</p>
+          <a class="card-link" href="storage.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>计算层</h3>
+          <p>Spark 与 Flink 的资源模型、批流一体写法与生产参数配置。</p>
+          <a class="card-link" href="compute.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>查询层</h3>
+          <p>Trino / Doris / ClickHouse 的原理、选型边界与联邦查询实践。</p>
+          <a class="card-link" href="query.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>数据集成</h3>
+          <p>Kafka、Flink CDC、DataX / SeaTunnel 的入湖链路设计与容错实践。</p>
+          <a class="card-link" href="integration.html">进入学习 →</a>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>下一步</strong>：底座决定上层建筑。建议从<a href="storage.html">存储层</a>开始——把 Iceberg 的快照与元数据机制吃透后，再回头看本页的批流一体设计，会有完全不同的理解深度。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

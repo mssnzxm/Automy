@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>查询引擎层 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：目录 + 正文 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#positioning">本层定位：三类查询引擎</a>
+      <a href="#trino">Apache Trino：MPP 联邦查询</a>
+      <a href="#doris">Apache Doris：高并发实时 OLAP</a>
+      <a href="#clickhouse">ClickHouse：时序列存分析</a>
+      <a href="#comparison">三引擎选型对比</a>
+      <a href="#acceleration">查询加速共性手段</a>
+      <a href="#boundary">适用边界</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">查询引擎层：Trino / Doris / ClickHouse</h1>
+      <div class="page-intro">
+        查询引擎层是湖仓一体面向分析师与应用系统的"门面"：存储层负责把数据以开放表格式低成本地存起来，
+        查询引擎负责在秒级甚至亚秒级把这些数据"算出来"。本页深入讲解三类主流引擎——联邦查询引擎 Trino、
+        高并发实时 OLAP 引擎 Doris、时序列存引擎 ClickHouse——的架构原理、关键配置、调优要点与选型决策，
+        帮助你在同一份湖仓数据之上构建合理的多引擎查询体系。
+      </div>
+
+      <!-- ==================== 本层定位 ==================== -->
+      <h2 id="positioning">本层定位：三类查询引擎的角色与组合</h2>
+      <p>
+        在存算分离的湖仓架构中，数据统一落在对象存储 + 开放表格式（Iceberg/Delta/Hudi）之上，
+        计算与查询引擎作为无状态（或轻状态）的消费者按需扩缩。此时"查询引擎"不再是一个单体组件，
+        而是按<span class="pill">查询模式</span>分化出的三类角色，它们共享同一份湖仓数据，各司其职：
+      </p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>联邦查询引擎 · Trino</h3>
+          <p>不落存储、只做计算。通过 Connector 体系同时连接 Iceberg 湖仓、业务库、ES 等异构数据源，
+            支撑跨源 JOIN 与 Ad-hoc 探索分析，是"数据不动、查询动"的典型实现。</p>
+        </div>
+        <div class="card">
+          <h3>实时 OLAP 引擎 · Doris</h3>
+          <p>FE/BE 架构 + 列存 + 预聚合，面向高并发报表、实时大屏、多维分析。
+            通过 Multi-Catalog 直接读取湖仓外表，也可将热点数据沉淀为内表获得极致性能。</p>
+        </div>
+        <div class="card">
+          <h3>时序列存引擎 · ClickHouse</h3>
+          <p>MergeTree 列存家族 + 向量化执行，单表扫描性能极致。面向日志、监控指标、
+            用户行为流等时序场景，以极低的存储成本支撑海量明细的即席圈选与聚合。</p>
+        </div>
+      </div>
+
+      <p>三类引擎在湖仓整体分层中的位置如下图所示——<strong>上层按 SLA 路由查询，下层共享一份数据</strong>：</p>
+
+      <div class="arch-layer">查询接入层：BI 报表 / Ad-hoc 分析 / 数据 API / Notebook</div>
+      <div class="arch-layer">查询引擎层：Trino 联邦查询 · Doris 高并发 OLAP · ClickHouse 时序分析</div>
+      <div class="arch-layer">统一存储层：对象存储 + Iceberg 开放表格式（一份数据，多引擎共享）</div>
+
+      <div class="diagram">
+        <svg width="560" height="252" viewBox="0 0 560 252" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="查询引擎层定位示意图">
+          <rect x="10" y="10" width="540" height="44" rx="8" fill="#0f766e"></rect>
+          <text x="280" y="38" text-anchor="middle" fill="#ffffff" font-size="14">BI 报表 / Ad-hoc 分析 / 数据 API / Notebook</text>
+          <line x1="95" y1="54" x2="95" y2="82" stroke="#0f172a" stroke-width="2"></line>
+          <line x1="280" y1="54" x2="280" y2="82" stroke="#0f172a" stroke-width="2"></line>
+          <line x1="465" y1="54" x2="465" y2="82" stroke="#0f172a" stroke-width="2"></line>
+          <rect x="10" y="84" width="170" height="62" rx="8" fill="#155e75"></rect>
+          <text x="95" y="109" text-anchor="middle" fill="#ffffff" font-size="13">Trino</text>
+          <text x="95" y="130" text-anchor="middle" fill="#ffffff" font-size="11">联邦查询 / Ad-hoc</text>
+          <rect x="195" y="84" width="170" height="62" rx="8" fill="#155e75"></rect>
+          <text x="280" y="109" text-anchor="middle" fill="#ffffff" font-size="13">Doris</text>
+          <text x="280" y="130" text-anchor="middle" fill="#ffffff" font-size="11">高并发实时 OLAP</text>
+          <rect x="380" y="84" width="170" height="62" rx="8" fill="#155e75"></rect>
+          <text x="465" y="109" text-anchor="middle" fill="#ffffff" font-size="13">ClickHouse</text>
+          <text x="465" y="130" text-anchor="middle" fill="#ffffff" font-size="11">时序 / 日志列存</text>
+          <line x1="95" y1="146" x2="95" y2="172" stroke="#0f172a" stroke-width="2"></line>
+          <line x1="280" y1="146" x2="280" y2="172" stroke="#0f172a" stroke-width="2"></line>
+          <line x1="465" y1="146" x2="465" y2="172" stroke="#0f172a" stroke-width="2"></line>
+          <rect x="10" y="174" width="540" height="50" rx="8" fill="#14b8a6"></rect>
+          <text x="280" y="204" text-anchor="middle" fill="#ffffff" font-size="14">统一存储：对象存储 + Iceberg 开放表格式</text>
+        </svg>
+      </div>
+
+      <h3>组合使用策略</h3>
+      <ul>
+        <li><strong>一份数据、多引擎共享</strong>：明细数据统一以 Iceberg 表落在对象存储，Trino/Doris 直接读取，
+          避免在多个引擎间反复同步造成的数据冗余与一致性问题。</li>
+        <li><strong>按 SLA 路由</strong>：交互式探索（分钟级可接受）走 Trino；高并发固定报表（亚秒级、千 QPS）走 Doris；
+          海量日志检索与圈选（毫秒~秒级）走 ClickHouse。</li>
+        <li><strong>冷热分层</strong>：热点数据沉淀到 Doris/ClickHouse 内表作为"加速层"，冷数据留在湖仓由 Trino 兜底，
+          加速层可随时从湖仓重建（可丢弃缓存语义）。</li>
+        <li><strong>避免引擎蔓延</strong>：每个新引擎都是一笔运维成本，引入前先确认现有引擎调优后确实无法满足场景。</li>
+      </ul>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：多引擎共读一份湖仓数据的前提是表格式提供快照隔离（如 Iceberg 的
+        snapshot isolation）。引擎读到的都是某个一致快照，不会出现"读到半个事务"的脏数据。
+      </div>
+
+      <!-- ==================== Apache Trino ==================== -->
+      <h2 id="trino">Apache Trino：MPP 联邦查询引擎</h2>
+
+      <h3>架构定位：coordinator + worker 的 MPP 模型</h3>
+      <p>
+        Trino 源自 Presto，是为交互式分析设计的 MPP（Massively Parallel Processing）查询引擎，
+        <span class="tag">存算分离的天然搭档</span>。集群由两类进程组成：
+      </p>
+      <ul>
+        <li><strong>Coordinator（协调节点）</strong>：接收 SQL，完成解析、语法分析、逻辑计划、基于代价的优化（CBO）、
+          生成分布式物理计划，并把任务（Stage/Task）调度到 Worker；本身不执行计算，是集群的"大脑"。</li>
+        <li><strong>Worker（工作节点）</strong>：从 Connector 拉取数据（Split 逻辑分片）、执行算子 pipeline、
+          通过 Exchange 在节点间 Shuffle 数据，最终由 Stage 汇聚结果。</li>
+      </ul>
+      <p>
+        Trino <strong>不自己管理存储</strong>，数据在哪里由 Connector 决定——这正是它联邦查询能力的根基。
+        查询生命周期为：SQL → AST → 逻辑计划 → 优化（谓词下推、列裁剪、join 分布策略选择）→
+        分片调度（NodeScheduler）→ 并行执行 → Exchange 汇聚 → 返回。
+      </p>
+
+      <h3>Connector 体系与联邦查询</h3>
+      <p>
+        Trino 中每个 <strong>Catalog</strong> 绑定一个 Connector，表名采用
+        <code>catalog.schema.table</code> 三段式。一条 SQL 可以同时引用多个 catalog，
+        Trino 将各源数据拉入集群内做统一分布式 JOIN，这就是"联邦查询"。核心 Connector 包括：
+        <code>iceberg</code>（湖仓一等公民）、<code>hive</code>、<code>delta-lake</code>、<code>mysql</code>、
+        <code>postgresql</code>、<code>doris</code>、<code>elasticsearch</code>、<code>kafka</code> 等 50 余种。
+      </p>
+
+      <p>为湖仓配置 Iceberg catalog（Hive Metastore 型），文件 <code>etc/catalog/iceberg.properties</code>：</p>
+      <pre><code># <span class="comment">连接 Hive Metastore 作为 Iceberg catalog</span>
+connector.name=iceberg
+iceberg.catalog.type=hive_metastore
+hive.metastore.uri=thrift://hive-meta:9083
+
+# <span class="comment">原生 S3 客户端访问对象存储（免 Hadoop 依赖，性能更好）</span>
+fs.native-s3.enabled=true
+s3.endpoint=https://oss.internal:443
+s3.path-style-access=true
+s3.aws-access-key=${ENV:AWS_ACCESS_KEY_ID}
+s3.aws-secret-key=${ENV:AWS_SECRET_ACCESS_KEY}
+
+# <span class="comment">读取优化：文件级统计与 Bloom 过滤</span>
+hive.parquet.use-bloom-filters=true</code></pre>
+
+      <p>同时挂载 PostgreSQL 与 Doris 两个数据源（联邦查询的另外两端）：</p>
+      <pre><code># etc/catalog/pg.properties —— <span class="comment">业务库（CRM）只读账号</span>
+connector.name=postgresql
+connection-url=jdbc:postgresql://pg-host:5432/crm
+connection-user=ro_user
+connection-password=******
+
+# etc/catalog/doris.properties —— <span class="comment">Doris 加速层</span>
+connector.name=doris
+doris.host=fe-host
+doris.port=9030
+doris.user=trino
+doris.password=*******</code></pre>
+
+      <p>跨源 JOIN 示例：一条 SQL 同时访问 <span class="pill">Iceberg 湖仓</span>、<span class="pill">PostgreSQL 业务库</span>与<span class="pill">Doris 加速层</span>：</p>
+      <pre><code>-- <span class="comment">月度 GMV 归因：明细在湖仓，维表在业务库，用户分层在 Doris</span>
+SELECT c.region                                   AS 大区,
+       substr(o.dt, 1, 7)                        AS 月份,
+       sum(o.amount)                              AS gmv
+FROM iceberg.lake.dwd_sales_orders o             -- <span class="comment">湖仓明细（Iceberg，主体事实表）</span>
+JOIN pg.crm.customers c                          -- <span class="comment">PostgreSQL 业务库维表</span>
+  ON o.customer_id = c.id
+JOIN doris.doris.user_profile u                  -- <span class="comment">Doris 中的实时用户分层结果</span>
+  ON u.uid = c.uid
+WHERE o.dt BETWEEN DATE '2026-07-01' AND DATE '2026-09-30'
+  AND u.level IN ('V1', 'V2')
+GROUP BY c.region, substr(o.dt, 1, 7)
+ORDER BY gmv DESC;</code></pre>
+
+      <div class="callout">
+        <strong>提示</strong>：跨源 JOIN 时，小表（如维表）应尽量被自动识别为 build 侧并广播（broadcast）；
+          若维表较大，建议先把维表定时同步入湖，避免每条查询都拉取远端数据。
+      </div>
+
+      <h3>内存管理：query.max-memory 三级限制</h3>
+      <p>
+        Trino 是<span class="tag">内存 pinned 执行</span>模型，用户内存（User Memory）在编译期即可预估。
+        集群通过三级配额防止单条 Ad-hoc 查询拖垮整体：
+        <code>query.max-memory</code>（单查询全集群）、<code>query.max-memory-per-node</code>（单查询单节点用户内存）、
+        <code>query.max-total-memory-per-node</code>（单查询单节点用户 + 系统内存，含 exchange 缓冲）。
+      </p>
+      <pre><code># etc/config.properties（coordinator 侧核心配置）
+coordinator=true
+node-scheduler.include-coordinator=false
+http-server.http.port=8080
+discovery.uri=http://trino-coord:8080
+
+# <span class="comment">内存三级限制（示例：16 节点集群，每节点 64G 堆）</span>
+query.max-memory=600GB
+query.max-memory-per-node=12GB
+query.max-total-memory-per-node=16GB
+
+# <span class="comment">集群内存紧张时，优先杀掉占用最多且被阻塞的查询，保护小查询</span>
+query.low-memory-killer.policy=total-reservation-on-blocked-nodes</code></pre>
+
+      <pre><code># etc/jvm.config（worker 与 coordinator：堆外直内存 + G1）
+-server
+-Xmx64G
+-XX:InitialRAMPercentage=80
+-XX:MaxRAMPercentage=80
+-XX:G1HeapRegionSize=32M
+-XX:+ExplicitGCInvokesConcurrent
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:+ExitOnOutOfMemoryError</code></pre>
+
+      <h3>Exchange 与执行并发调优</h3>
+      <p>
+        Exchange 是 Trino 节点间 Shuffle 数据的通道。大表 JOIN/聚合时 exchange 缓冲会占用大量内存，
+        2022 之后版本支持 <strong>spooling exchange</strong>（交换数据落盘），让超大 shuffle 不再 OOM：
+      </p>
+      <pre><code># etc/config.properties（worker 侧）
+# <span class="comment">超大 shuffle 落盘，用磁盘换内存稳定性</span>
+exchange.spooling.enabled=true
+exchange.spooling.shared-storage-path=file:///data1/trino-spool,file:///data2/trino-spool
+spiller.max-used-space=500GB
+
+# <span class="comment">调度并发：单节点同时执行的 split 数与排队上限</span>
+node-scheduler.max-splits-per-node=256
+node-scheduler.max-queued-splits-per-task=2000</code></pre>
+      <ul>
+        <li><strong>split 数量调优</strong>：湖仓表的小文件过多会导致 split 爆炸、调度开销剧增；
+          读写侧统一设置 <code>write.target-file-size-bytes</code>（如 128~512MB）保证文件规整。</li>
+        <li><strong>join 分布策略</strong>：用 <code>EXPLAIN</code> 确认大表 JOIN 走 partitioned 而非误广播；
+          小维表可用 hint <code>"broadcast"</code> 强制广播，省一次全表 shuffle。</li>
+        <li><strong>会话级控制</strong>：Ad-hoc 平台建议默认给用户设置
+          <code>SET SESSION query_max_run_time = '30min'</code> 与内存配额，防跑飞。</li>
+        <li><strong>写并发</strong>：CTAS/INSERT 大结果集时调大 Iceberg 会话参数
+          <code>iceberg.max-partitions-per-writer</code> 相关写入并发，避免写入成为长尾。</li>
+      </ul>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：Trino 调优的第一工具永远是 <code>EXPLAIN ANALYZE</code>——先看哪个 Stage
+          最慢、数据量在哪个算子膨胀，再针对性下推谓词、调整 join 策略或加分区过滤，而不是盲目改参数。
+      </div>
+
+      <div class="callout">
+        <strong>适用边界</strong>：Trino 擅长"读多写少"的交互式查询，<strong>不适合作为 ETL 主引擎</strong>——
+          它没有容错重试的 job 级语义，大 shuffle 与大规模写入场景应交给 Spark/Flink。
+      </div>
+
+      <!-- ==================== Apache Doris ==================== -->
+      <h2 id="doris">Apache Doris：高并发实时 OLAP</h2>
+
+      <h3>架构定位：FE + BE 的实时分析引擎</h3>
+      <p>
+        Doris 是 MPP 架构的实时分析型数据库，<span class="tag">MySQL 协议兼容</span>让 BI 工具零成本接入。
+        集群由两类组件构成：
+      </p>
+      <ul>
+        <li><strong>FE（Frontend）</strong>：存储全量元数据（基于 BerkeleyDB JE / RocksDB Raft 复制），
+          负责 SQL 解析、查询计划、元数据管理与导入调度。FE 分 Leader/Follower/Observer 三种角色，
+          Follower 参与选主，Observer 只读扩展查询接入点。</li>
+        <li><strong>BE（Backend）</strong>：存储数据与执行查询。数据按 <code>分区 → 分桶（Bucket）→ Tablet</code>
+          三级组织，Tablet 是数据复制、迁移的最小单元，默认三副本，副本间通过 Raft 协议保证一致性。</li>
+      </ul>
+      <p>
+        与 Trino"只算不存"不同，Doris 通常以"内表"形式持有数据（存算耦合部署，亦可选存算分离模式），
+        因此既承担查询也承担实时写入（Stream Load / Routine Load / INSERT INTO SELECT）。
+        在湖仓架构中，Doris 的典型角色是<span class="pill">高并发加速层</span>：湖仓保存全量冷数据，
+        Doris 内表保存近期热数据，或通过 Multi-Catalog 直查湖仓。
+      </p>
+
+      <h3>表模型选型：Duplicate / Aggregate / Unique</h3>
+      <p>建表时必须先回答"这份数据要不要去重、要不要预聚合"，三种模型对应三类语义：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>表模型</th>
+            <th>语义</th>
+            <th>典型场景</th>
+            <th>注意事项</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Duplicate（明细模型）</td>
+            <td>不做任何聚合，重复行全部保留</td>
+            <td>ODS 明细入湖、日志宽表、明细圈选</td>
+            <td>最通用；聚合靠查询时算，配合 Rollup/MV 加速</td>
+          </tr>
+          <tr>
+            <td>Aggregate（聚合模型）</td>
+            <td>Key 相同时 Value 按 AGG 类型合并（SUM/REPLACE/MAX/MIN/BITMAP）</td>
+            <td>流量统计、用户行为预聚合、PV/UV</td>
+            <td>查询结果与明细不完全等价；无法回查明细</td>
+          </tr>
+          <tr>
+            <td>Unique（主键模型）</td>
+            <td>主键唯一，新数据覆盖旧数据</td>
+            <td>订单状态流转、用户画像、维表同步</td>
+            <td>推荐 merge-on-write（写时合并），点查与聚合性能更好</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>三种模型的建表示例（同一份订单数据的三种建模姿势）：</p>
+      <pre><code>-- <span class="comment">1) Duplicate 明细模型：湖仓 ODS 层标准姿势，明细全保留</span>
+CREATE TABLE lake.dwd_order_detail (
+    dt        DATE        NOT NULL,
+    order_id  BIGINT      NOT NULL,
+    user_id   BIGINT,
+    sku_id    BIGINT,
+    qty       INT,
+    amount    DECIMAL(12, 2)
+) ENGINE = OLAP
+DUPLICATE KEY(dt, order_id)
+PARTITION BY RANGE(dt) (
+    PARTITION p202610 VALUES [("2026-10-01"), ("2026-11-01")),
+    PARTITION p202611 VALUES [("2026-11-01"), ("2026-12-01"))
+)
+DISTRIBUTED BY HASH(user_id) BUCKETS 32
+PROPERTIES (
+    "replication_num" = "3",
+    "store_row_column" = "true"      -- <span class="comment">行列混存：高频点查大宽表时显著提速</span>
+);
+
+-- <span class="comment">2) Aggregate 聚合模型：按天按用户预聚合，写入即聚合</span>
+CREATE TABLE lake.dws_user_daily (
+    dt          DATE        NOT NULL,
+    user_id     BIGINT      NOT NULL,
+    order_cnt   BIGINT      SUM,
+    gmv         DECIMAL(16, 2) SUM,
+    last_tag    VARCHAR(64) REPLACE,    -- <span class="comment">非 key 列必须声明聚合类型</span>
+    first_time  DATETIME    MIN
+) ENGINE = OLAP
+AGGREGATE KEY(dt, user_id)
+PARTITION BY RANGE(dt) ()
+DISTRIBUTED BY HASH(user_id) BUCKETS 16
+PROPERTIES ("replication_num" = "3");
+
+-- <span class="comment">3) Unique 主键模型：merge-on-write，CDC 同步订单状态首选</span>
+CREATE TABLE lake.ods_orders_pk (
+    order_id   BIGINT      NOT NULL,
+    user_id    BIGINT,
+    status     TINYINT,
+    amount     DECIMAL(12, 2),
+    updated_at DATETIME
+) ENGINE = OLAP
+UNIQUE KEY(order_id)
+DISTRIBUTED BY HASH(order_id) BUCKETS 32
+PROPERTIES (
+    "replication_num" = "3",
+    "enable_unique_key_merge_on_write" = "true"
+);</code></pre>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：Aggregate / Unique 模型中，Value 列的聚合类型一旦建表<strong>无法修改</strong>；
+          模型选错只能重建表导数。建模评审时请先确认消费方的查询语义（要看明细还是看聚合结果）。
+      </div>
+
+      <h3>Rollup 与物化视图加速</h3>
+      <p>
+        两者的共同思想是"空间换时间"，由优化器自动匹配改写查询，对业务方完全透明：
+      </p>
+      <ul>
+        <li><strong>Rollup（上卷表）</strong>：按更粗粒度的 Key 建立子表，导入时自动同步聚合。</li>
+        <li><strong>异步物化视图（Async MV）</strong>：支持多表 JOIN、复杂计算、定时/手动刷新，可串联（MV 套 MV），
+          是湖仓分层的"DWS 加速层"利器。</li>
+      </ul>
+      <pre><code>-- <span class="comment">Rollup：按天+商品聚合，报表按商品维度查询自动命中</span>
+ALTER TABLE lake.dwd_order_detail
+ADD ROLLUP rollup_sku_day(dt, sku_id, qty, amount);
+
+-- <span class="comment">异步物化视图：每小时刷新的分区级 GMV 汇总（支持湖仓外表参与）</span>
+CREATE MATERIALIZED VIEW lake.mv_city_gmv
+BUILD IMMEDIATE
+REFRESH AUTO ON SCHEDULE EVERY 1 HOUR
+PROPERTIES ("grace_period" = "600")
+AS
+SELECT dt, city_id, sum(amount) AS gmv, count(DISTINCT user_id) AS uv
+FROM lake.dwd_order_detail
+GROUP BY dt, city_id;
+
+-- <span class="comment">验证：查询被改写命中物化视图</span>
+EXPLAIN SELECT dt, sum(amount) FROM lake.dwd_order_detail
+WHERE dt = '2026-11-01' GROUP BY dt;   -- <span class="comment">计划中出现 mv_city_gmv 即命中</span></code></pre>
+
+      <h3>湖仓外表：Multi-Catalog 直查 Iceberg/Hive/Hudi</h3>
+      <p>
+        Doris 的 Multi-Catalog 机制把外部数据源（Iceberg、Hive、Hudi、ES、JDBC 等）挂载为独立 catalog，
+        无需导入即可查询，还支持与内表 JOIN、作为物化视图的基表——这是它扮演
+        <span class="pill">湖仓查询门户</span>的关键能力：
+      </p>
+      <pre><code>-- <span class="comment">挂载 Iceberg catalog（Hive Metastore 型）</span>
+CREATE CATALOG iceberg_lake PROPERTIES (
+    "type" = "iceberg",
+    "iceberg.catalog.type" = "hive",
+    "hive.metastore.uris" = "thrift://hive-meta:9083",
+    "aws.s3.enable_path_style_access" = "true",
+    "aws.s3.endpoint" = "https://oss.internal",
+    "aws.s3.access_key" = "******",
+    "aws.s3.secret_key" = "******"
+);
+
+-- <span class="comment">湖仓外表与 Doris 内表直接 JOIN：明细在湖，维表在库</span>
+SELECT o.dt, c.city_name, sum(o.amount) AS gmv
+FROM iceberg_lake.lake.dwd_order_detail o   -- <span class="comment">Iceberg 外表</span>
+JOIN lake.dim_city c ON o.city_id = c.id    -- <span class="comment">Doris 内表维表</span>
+WHERE o.dt &gt;= '2026-10-01'
+GROUP BY o.dt, c.city_name;
+
+-- <span class="comment">外表数据下沉：加热点分区到内表，获得极致并发</span>
+INSERT INTO lake.dwd_order_detail_hot
+SELECT * FROM iceberg_lake.lake.dwd_order_detail
+WHERE dt &gt;= date_sub(current_date(), INTERVAL 7 DAY);</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：外表查询适合"低频全量/探查"；高 QPS 报表请把热点分区下沉为内表
+          （可丢弃缓存语义，随时从湖仓重建），并为内表配上物化视图——三层递进：湖仓外表 → 内表热数据 → MV 聚合。
+      </div>
+
+      <h3>分区/分桶设计与 Colocate Join</h3>
+      <ul>
+        <li><strong>分区（Partition）</strong>：RANGE 按时间分区是 OLAP 标配，查询带时间条件即可裁剪掉绝大多数 tablet；
+          建议配合动态分区属性自动滚动建删分区。</li>
+        <li><strong>分桶（Bucket）</strong>：分桶列选高基数、常用于 JOIN/过滤的列（如 user_id），
+          让数据均匀打散到 tablet；桶数经验公式：
+          <code>桶数 ≈ 表大小 / 单 tablet 目标大小(5~10GB)</code>，且为 BE 数量的整数倍。</li>
+        <li><strong>Colocate Join</strong>：把两表按相同分桶列、相同桶数放在同一组（Colocate Group），
+          JOIN 时数据已按同键分布，<strong>免 Shuffle 本地 JOIN</strong>，是大表 JOIN 大表的终极速手段。</li>
+      </ul>
+      <pre><code>-- <span class="comment">动态分区：按天滚动，保留 90 天，预建 7 天</span>
+ALTER TABLE lake.dwd_order_detail SET (
+    "dynamic_partition.enable" = "true",
+    "dynamic_partition.time_unit" = "DAY",
+    "dynamic_partition.start" = "-90",
+    "dynamic_partition.end" = "7",
+    "dynamic_partition.prefix" = "p"
+);
+
+-- <span class="comment">订单表与用户画像表同组同桶，本地 JOIN 免 Shuffle</span>
+CREATE TABLE lake.dws_user_profile (
+    user_id     BIGINT      NOT NULL,
+    level       VARCHAR(8),
+    city_id     INT,
+    updated_at  DATETIME
+) ENGINE = OLAP
+UNIQUE KEY(user_id)
+DISTRIBUTED BY HASH(user_id) BUCKETS 32
+PROPERTIES (
+    "replication_num" = "3",
+    "colocate_with" = "shop_user_group"   -- <span class="comment">与 dwd_order_detail 同组</span>
+);
+
+-- <span class="comment">验证计划：出现 COLOCATE JOIN 即命中本地 JOIN</span>
+EXPLAIN SELECT /*+ SET_VAR(enable_nereids_planner=true) */
+       p.level, count(*) AS orders
+FROM lake.dwd_order_detail o
+JOIN lake.dws_user_profile p ON o.user_id = p.user_id
+GROUP BY p.level;</code></pre>
+
+      <div class="callout">
+        <strong>适用边界</strong>：Doris 的强项是高并发报表与实时更新查询；超大表复杂 Ad-hoc JOIN、
+          跨异构源联邦（几十个源）仍建议交给 Trino；Doris 内表副本数 × 数据量决定了它的持有成本，
+          不适合把全量历史冷数据都装进来。
+      </div>
+
+      <!-- ==================== ClickHouse ==================== -->
+      <h2 id="clickhouse">ClickHouse：时序列存分析</h2>
+
+      <h3>架构定位与 MergeTree 家族</h3>
+      <p>
+        ClickHouse（CH）是面向<span class="tag">真正的列式存储</span>的 OLAP 引擎，以向量化执行、
+        稀疏索引、极致压缩著称。数据按 <code>分片（Shard）→ 副本（Replica）</code> 组织，
+        DDL 建在本地表（如 <code>MergeTree</code>）之上，再由 <code>Distributed</code> 表做分布式路由。
+        其核心引擎是 MergeTree 家族——数据按 <code>ORDER BY</code> 键排序存储，后台不断合并（Merge）数据分块（Part），
+        家族成员按"合并时做什么"分化：
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>引擎</th>
+            <th>合并行为</th>
+            <th>典型场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MergeTree</td>
+            <td>仅排序合并，不去重不聚合</td>
+            <td>通用明细表：日志、事件、行为流水</td>
+          </tr>
+          <tr>
+            <td>ReplacingMergeTree</td>
+            <td>按 ORDER BY 键去重，保留版本（ver）最大的行</td>
+            <td>有更新语义的同步表（订单状态），需最终一致</td>
+          </tr>
+          <tr>
+            <td>AggregatingMergeTree</td>
+            <td>按 ORDER BY 键合并 AggregateFunction 状态</td>
+            <td>预聚合中间层（配合物化视图做增量聚合）</td>
+          </tr>
+          <tr>
+            <td>SummingMergeTree</td>
+            <td>数值列按 ORDER BY 键求和</td>
+            <td>简单指标累加（金额、次数）</td>
+          </tr>
+          <tr>
+            <td>CollapsingMergeTree</td>
+            <td>用 sign=1/-1 折叠行，删撤事件</td>
+            <td>不断变化的统计（实时正确计数）</td>
+          </tr>
+          <tr>
+            <td>ReplicatedMergeTree 系</td>
+            <td>上述引擎 + 副本复制（基于 Replication Log）</td>
+            <td>所有生产表的标配前缀 Replicated*</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code>-- <span class="comment">日志明细表：ReplicatedMergeTree + 跳数索引 + TTL</span>
+CREATE TABLE logs.log_events ON CLUSTER log_cluster
+(
+    event_time  DateTime64(3),
+    server      LowCardinality(String),
+    level       Enum8('DEBUG' = 1, 'INFO' = 2, 'WARN' = 3, 'ERROR' = 4),
+    trace_id    String,
+    message     String CODEC(ZSTD(3)),          -- <span class="comment">列级压缩算法，文本列高压缩比</span>
+    attrs       Map(String, String),
+    INDEX idx_trace trace_id TYPE bloom_filter GRANULARITY 4   -- <span class="comment">跳数索引：等值查 trace_id</span>
+)
+ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/log_events', '{replica}')
+PARTITION BY toDate(event_time)
+ORDER BY (server, event_time, trace_id)        -- <span class="comment">排序键前缀决定查询快慢</span>
+TTL toDateTime(event_time) + INTERVAL 90 DAY   -- <span class="comment">行级 TTL：过期自动物理删除</span>
+SETTINGS index_granularity = 8192;
+
+-- <span class="comment">分布式表：业务查询入口，按 sharding_key 路由到分片</span>
+CREATE TABLE logs.log_events_all ON CLUSTER log_cluster
+AS logs.log_events
+ENGINE = Distributed(log_cluster, logs, log_events, rand());</code></pre>
+
+      <h3>时序 / 日志场景为何占优</h3>
+      <ul>
+        <li><strong>排序键即索引</strong>：查询条件命中 ORDER BY 前缀（如 server + 时间范围）时，
+          稀疏主索引直接跳到目标 granule，扫描量呈数量级下降。</li>
+        <li><strong>压缩比极高</strong>：按排序列存储后相邻值相似，日志/时序场景 ZSTD 压缩 10:1 很常见，
+          存储+扫描成本双低。</li>
+        <li><strong>跳数索引（Data Skipping Index）</strong>：<code>minmax</code>、<code>bloom_filter</code>、
+          <code>tokenbf_v1</code> 等对非排序列（trace_id、ERROR 码）提供二级过滤。</li>
+        <li><strong>适合追加写</strong>：时序/日志天然 append-only，与 MergeTree 的批量写入 + 后台合并模型完美契合。</li>
+      </ul>
+
+      <h3>物化视图与 TTL</h3>
+      <p>
+        CH 的物化视图是<span class="pill">插入触发</span>的增量计算：源表每批写入，MV 按查询逻辑把结果增量写入目标表，
+        搭配 AggregatingMergeTree 可实现"边写边聚合"，查询时用 <code>*Merge</code> 函数合并中间状态：
+      </p>
+      <pre><code>-- <span class="comment">错误指标按分钟预聚合，写入即触发，无需定时任务</span>
+CREATE MATERIALIZED VIEW logs.log_error_1m
+ENGINE = AggregatingMergeTree
+PARTITION BY toYYYYMM(window_start)
+ORDER BY (window_start, server)
+AS
+SELECT toStartOfMinute(event_time) AS window_start,
+       server,
+       countState()                AS error_cnt,   -- <span class="comment">存聚合状态而非结果</span>
+       maxState(event_time)        AS last_err
+FROM logs.log_events_all
+WHERE level &gt;= 3
+GROUP BY window_start, server;
+
+-- <span class="comment">查询：用 *Merge 函数合并状态，得到最终指标</span>
+SELECT window_start, server,
+       countMerge(error_cnt) AS errors,
+       maxMerge(last_err)    AS last_error_time
+FROM logs.log_error_1m
+WHERE window_start &gt;= now() - INTERVAL 1 DAY
+GROUP BY window_start, server
+ORDER BY errors DESC;
+
+-- <span class="comment">分层 TTL：热数据 SSD 保留 7 天，冷数据 HDD 保留 90 天后删除</span>
+ALTER TABLE logs.log_events
+MODIFY TTL toDateTime(event_time) + INTERVAL 7 DAY TO VOLUME 'ssd_hot',
+           toDateTime(event_time) + INTERVAL 90 DAY TO VOLUME 'hdd_cold',
+           toDateTime(event_time) + INTERVAL 365 DAY DELETE;</code></pre>
+
+      <h3>ClickHouse vs Doris 详细对比</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Doris</th>
+            <th>ClickHouse</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>架构</td>
+            <td>FE（元数据/计划）+ BE（存储/执行），自动分桶副本，部署简单</td>
+            <td>分片 + 副本，本地表 + Distributed 表，ZooKeeper/Keeper 协调复制</td>
+          </tr>
+          <tr>
+            <td>高并发</td>
+            <td>强：简单查询可承载数百~上千 QPS，并发模型友好</td>
+            <td>中：大查询吃满 CPU，高并发需限流/读写分离/预聚合兜底</td>
+          </tr>
+          <tr>
+            <td>JOIN 能力</td>
+            <td>强：多表 JOIN、Colocate、Bucket Shuffle、MV 透明改写</td>
+            <td>偏弱：推荐大宽表；JOIN 需谨慎选择算法与内存</td>
+          </tr>
+          <tr>
+            <td>数据更新</td>
+            <td>Unique MoW 支持高频 upsert，准实时可见</td>
+            <td>ReplacingMergeTree 异步合并去重，查询需 FINAL（有代价）</td>
+          </tr>
+          <tr>
+            <td>湖仓生态</td>
+            <td>Multi-Catalog 直查 Iceberg/Hive/Hudi，可回写</td>
+            <td>Iceberg/HDFS 引擎表可查但能力较浅，主打自有表格式</td>
+          </tr>
+          <tr>
+            <td>协议与工具</td>
+            <td>MySQL 协议，BI/应用无缝接入</td>
+            <td>原生 TCP + HTTP + JDBC，生态偏观测/日志平台（Grafana 友好）</td>
+          </tr>
+          <tr>
+            <td>运维复杂度</td>
+            <td>中：扩缩容自动均衡，学习曲线平缓</td>
+            <td>高：合并调优、分片规划、ZK 依赖、故障手工介入多</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>适用边界</strong>：ClickHouse 在"单表大宽表扫描 + 时序日志检索"上无出其右；
+          但高并发固定报表、频繁 upsert、多表关联的"经典数仓语义"场景，Doris 通常更省心。
+          湖仓体系中 CH 数据一般通过同步链路引入（自建副本），而非直读湖仓。
+      </div>
+
+      <!-- ==================== 三引擎选型对比 ==================== -->
+      <h2 id="comparison">三引擎选型对比</h2>
+      <p>
+        三个引擎并非"三选一"的竞争关系，而是按查询模式分工的协作关系。
+        下表从六个维度给出横向对比，作为选型决策的速查表：
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Trino</th>
+            <th>Doris</th>
+            <th>ClickHouse</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>查询延迟定位</td>
+            <td>秒 ~ 分钟级（交互式 Ad-hoc）</td>
+            <td>亚秒 ~ 秒级（固定报表）</td>
+            <td>毫秒 ~ 秒级（单表扫描聚合）</td>
+          </tr>
+          <tr>
+            <td>并发能力</td>
+            <td>中：数十~数百并发，受大查询挤占影响</td>
+            <td>高：简单查询可达千级 QPS</td>
+            <td>中低：大查询独占资源，需预聚合兜底</td>
+          </tr>
+          <tr>
+            <td>JOIN 能力</td>
+            <td><strong>最强</strong>：跨源、大表、CBO 优化成熟</td>
+            <td>强：Colocate/Bucket Shuffle/MV 改写</td>
+            <td>偏弱：大宽表哲学，JOIN 是短板</td>
+          </tr>
+          <tr>
+            <td>湖仓支持</td>
+            <td>原生 Connector 一等公民，读 Iceberg/Delta/Hudi</td>
+            <td>Multi-Catalog 读 Iceberg/Hive/Hudi + 数据下沉</td>
+            <td>Iceberg 等外表可查但较浅，多同步自建</td>
+          </tr>
+          <tr>
+            <td>数据更新</td>
+            <td>依赖表格式自身（写入场景弱）</td>
+            <td>Unique MoW 高频 upsert</td>
+            <td>后台合并去重，异步最终一致</td>
+          </tr>
+          <tr>
+            <td>运维复杂度</td>
+            <td>中：进程无状态，K8s 友好</td>
+            <td>中：FE/BE 自动化程度高</td>
+            <td>高：合并/分片/副本/ZK 需持续关注</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>场景决策树</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h3>交互式联邦 → Trino</h3>
+          <p>数据分析师在 Notebook 里做探索、需要 JOIN 业务库/湖仓/第三方库、
+            查询模式不可预知、数据规模在 PB 级以内但延迟容忍秒级。</p>
+          <span class="tag">Ad-hoc</span> <span class="tag">跨源 JOIN</span> <span class="tag">SQL 方言标准</span>
+        </div>
+        <div class="card">
+          <h3>高并发报表 → Doris</h3>
+          <p>固定报表、实时大屏、面向 C 端的数据服务 API：查询模式收敛、要求亚秒与高 QPS、
+            维表关联与指标口径统一管理。</p>
+          <span class="tag">实时大屏</span> <span class="tag">QPS 敏感</span> <span class="tag">upsert 语义</span>
+        </div>
+        <div class="card">
+          <h3>海量日志时序 → ClickHouse</h3>
+          <p>日志检索、APM 指标、安全风控的行为流分析：数据体量巨大、按时间追加、
+            以扫描聚合与圈选为主，几乎不做复杂 JOIN。</p>
+          <span class="tag">日志/APM</span> <span class="tag">高压缩比</span> <span class="tag">明细圈选</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="callout-best">
+          <strong>推荐组合</strong>：湖仓统一存储（Iceberg）+ Trino 做联邦与探查入口 +
+            Doris 承接高并发固定消费 + ClickHouse 承接日志时序类专用负载。
+            每个引擎只做它最擅长的事，且都可从湖仓重建加速数据。
+        </div>
+        <div class="callout-warn">
+          <strong>反模式</strong>：把 Doris 当 ETL 引擎跑复杂多阶段转换；用 ClickHouse 做高并发多表 JOIN 报表；
+            让 Trino 承载千 QPS 的线上 API 查询——这些都是把引擎用在短板上的典型事故来源。
+        </div>
+      </div>
+
+      <!-- ==================== 查询加速共性手段 ==================== -->
+      <h2 id="acceleration">查询加速共性手段</h2>
+      <p>
+        无论选用哪个引擎，查询加速的底层逻辑是相通的：<strong>少扫数据、少算数据、不重复算</strong>。
+        以下五类手段在 Trino/Doris/ClickHouse 以及表格式侧各有对应实现：
+      </p>
+
+      <h3>1. 缓存</h3>
+      <ul>
+        <li><strong>结果缓存</strong>：Doris Query Cache 按 tablet 分片缓存聚合结果，分区数据更新自动失效；
+          ClickHouse 23 年后内置 <code>query_cache</code>；Trino 侧常用 BI 层缓存（如 Metabase 缓存）。</li>
+        <li><strong>数据块缓存</strong>：Trino <code>hive.parquet.pushdown-filter-enabled</code> 配合文件缓存、
+          Doris 外表/内表的 Page Cache、CH 的 <code>mark_cache</code>/<code>uncompressed_cache</code>，
+          本质都是"热数据驻留内存，冷数据按需拉取"。</li>
+        <li><strong>对象存储前置缓存</strong>：Alluxio / JuiceFS / JindoFS 等，为"存算分离 + 远端存储"
+          的架构补上本地性，对反复扫描的热分区收益显著。</li>
+      </ul>
+
+      <h3>2. 分区裁剪</h3>
+      <p>
+        查询条件命中分区列时，引擎在计划期直接跳过无关分区的全部文件。Iceberg 的<strong>隐藏分区</strong>
+        （partition by days(ts)）让业务方按原始列 <code>WHERE ts &gt;= ...</code> 查询也能裁剪，
+        避免了 Hive 时代"分区函数写错导致全表扫"的经典事故。
+      </p>
+
+      <h3>3. 谓词下推与文件跳过</h3>
+      <p>
+        引擎把 WHERE 条件尽量下推到存储层：Parquet 的 Row Group 级 min/max 统计、Bloom Filter，
+        加上 Iceberg 记录在 manifest 里的文件级统计，可以在<strong>不读文件</strong>的情况下判断"这个文件要不要打开"。
+      </p>
+
+      <h3>4. 物化视图与预聚合</h3>
+      <p>
+        高频固定的聚合查询（大屏、日报）应沉到物化层：Doris Async MV、CH AggregatingMergeTree+MV、
+        或直接在湖仓侧用 Spark/Flink 定时生成 DWS 汇总表（引擎无关，Trino/Doris 都能查）。
+        判断标准：<span class="tag">查询模式收敛 + 消费频率高 + 口径稳定</span>。
+      </p>
+
+      <h3>5. 排序与聚簇</h3>
+      <ul>
+        <li><strong>Iceberg SORT BY</strong>：写入时按高频过滤列排序，让数据局部性最大化：
+<pre><code>ALTER TABLE lake.dwd_sales_orders
+WRITE ORDERED BY (city_id, dt, user_id);   -- <span class="comment">重写时按过滤列排序聚簇</span>
+
+-- <span class="comment">或用分布式策略（多列等权过滤场景）</span>
+ALTER TABLE lake.dwd_user_events
+WRITE ORDERED BY zorder(campaign_id, channel, dt);</code></pre></li>
+        <li><strong>Doris 分桶即聚簇</strong>：分桶列选高频过滤/JOIN 列；CH 的 ORDER BY 前缀同理。
+          三者的共同思想：让"经常一起被过滤的列"在物理上相邻。</li>
+      </ul>
+
+      <h3>Iceberg 统计信息（write.metrics）对引擎的价值</h3>
+      <p>
+        Iceberg 在 manifest 中为每个数据文件记录列级统计（min/max、null 计数、NaN 计数、值计数），
+        由写入侧表属性 <code>write.metadata.metrics.default</code> 控制收集粒度。
+        Trino/Doris/Spark 读表时利用这些统计做<strong>文件跳过（File Skipping）</strong>，
+        统计越精细，跳过越激进，扫描 I/O 越少：
+      </p>
+      <pre><code>-- <span class="comment">建表时设置统计收集模式</span>
+CREATE TABLE lake.dwd_sales_orders (
+    dt          DATE,
+    order_id    BIGINT,
+    city_id     INT,
+    user_id     BIGINT,
+    amount      DECIMAL(12, 2)
+) USING iceberg
+PARTITIONED BY (days(dt))
+TBLPROPERTIES (
+    'write.metadata.metrics.default' = 'truncate(16)',          -- <span class="comment">字符串列截断统计，均衡体积与精度</span>
+    'write.metadata.metrics.column.structures'  = 'full',       -- <span class="comment">高基数 ID 列用全文统计</span>
+    'write.metadata.metrics.column.contents'    = 'none'        -- <span class="comment">大字段不收集，控制元数据膨胀</span>
+);</code></pre>
+      <table>
+        <thead>
+          <tr>
+            <th>metrics 模式</th>
+            <th>收集内容</th>
+            <th>适用建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>none</td>
+            <td>仅记录行数</td>
+            <td>大对象/超宽表，元数据优先</td>
+          </tr>
+          <tr>
+            <td>counts</td>
+            <td>行数 + null/NaN 计数</td>
+            <td>过滤主要靠分区与排序列时</td>
+          </tr>
+          <tr>
+            <td>truncate(N)</td>
+            <td>counts + 截断到 N 字节的 min/max</td>
+            <td><strong>默认推荐</strong>：字符串列防元数据膨胀</td>
+          </tr>
+          <tr>
+            <td>full</td>
+            <td>counts + 完整 min/max</td>
+            <td>定长数值/高基数过滤列，跳过率最优</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：湖仓表的"排序键 + 分区键 + metrics 精度"三件套应在建模评审时一并确定——
+          它们决定了所有下游引擎的文件跳过效率，是投入产出比最高的查询加速投资。
+      </div>
+
+      <!-- ==================== 适用边界 ==================== -->
+      <h2 id="boundary">适用边界</h2>
+
+      <h3>何时不引入新引擎</h3>
+      <ul>
+        <li><strong>现有引擎未调优到位</strong>：加了索引/MV/分区裁剪就能达标时，先调优再谈选型；
+          "换引擎"应是量化证据（压测报告）驱动的决策，而非追逐新技术的冲动。</li>
+        <li><strong>数据规模未到量级</strong>：GB~百 GB 级、并发个位数，Spark Thrift Server / 单机 DuckDB
+          甚至 Postgres 就能胜任。</li>
+        <li><strong>团队无运维承接能力</strong>：每个引擎都是 7×24 的运维对象（升级、故障、安全补丁），
+          没有专职或轮值团队之前，引擎数量应保持克制。</li>
+        <li><strong>场景可被"加速层"覆盖</strong>：多数报表加速需求，用 Doris 一个引擎 + MV 即可覆盖，
+          不需要再引入 CH/StarRocks 等第二 OLAP。</li>
+      </ul>
+
+      <h3>何时不该用 OLAP 引擎做 ETL</h3>
+      <ul>
+        <li><strong>缺乏作业级容错语义</strong>：OLAP 引擎为交互查询设计，没有 Spark/Flink 那样的
+          stage 重试、checkpoint、失败恢复机制；长 ETL 中途失败往往只能整体重跑。</li>
+        <li><strong>大 shuffle 与多阶段转换是常态</strong>：复杂清洗、多级 JOIN、回填重算会长时间占用
+          查询资源，与线上 Ad-hoc 争抢内存（Trino 会互相杀查询），抖动直接传导给业务。</li>
+        <li><strong>写放大与事务保障不足</strong>：OLAP 引擎的写入面向"批量导入"，不是面向"事务性多表写入"；
+          跨表一致性、幂等重写、Schema 演进等湖仓写入语义应由 Spark/Flink + 表格式承担。</li>
+        <li><strong>正确分工</strong>：<span class="pill">ETL/ELT 归 Spark/Flink，交互查询归 OLAP 引擎</span>；
+          "用 Doris 的 INSERT INTO SELECT 做轻量调度加工"可以，"把它当日批主引擎"不行。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>总结</strong>：查询引擎层的设计准则是——以开放表格式为统一底座，按查询模式（联邦/并发/时序）
+          选择引擎，用共性加速手段（分区、下推、MV、排序、缓存）把每个引擎的能力兑现，
+          并时刻警惕引擎蔓延与角色错配。
+      </div>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

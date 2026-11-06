@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>首页 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧"本页导航"目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#why">为什么需要湖仓一体</a>
+      <a href="#stack">技术栈全景</a>
+      <a href="#roadmap">学习路线</a>
+      <a href="#advanced">治理与实战</a>
+      <a href="#readers">适合谁读</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">数据湖仓一体（Lakehouse）教程</h1>
+      <div class="page-intro">
+        本站面向「数据湖仓一体架构师」岗位能力模型，系统讲解湖仓一体的六层技术栈——存储与表格式、计算引擎、查询引擎、数据集成、调度与资源、可观测性——并延伸到数据治理、性能调优与高阶场景实战。跟着学完，你将具备从零设计、建设并稳定运维一套现代数据平台的完整知识体系。
+      </div>
+
+      <div class="callout">
+        <strong>全站示例约定</strong>：为保持口径一致，全站代码示例统一使用 catalog 名 <code>lakehouse</code>、仓库路径 <code>s3://lakehouse/wh</code>、日期分区字段 <code>dt</code>，业务背景以电商交易数据为主。替换为你自己环境的参数后即可直接实践。
+      </div>
+
+      <!-- ================= 一、为什么需要湖仓一体 ================= -->
+      <h2 id="why">为什么需要湖仓一体</h2>
+      <p>过去十年，绝大多数企业同时供养着两套数据平台：一套是以 Oracle、Greenplum、Hive 数仓为代表的<strong>数据仓库</strong>，服务报表与经营分析；一套是以 HDFS 为核心的<strong>数据湖</strong>，堆积埋点日志与原始文件，供算法工程师自由探索。两套平台并行，看似分工明确，实则暗藏系统性痛点：</p>
+      <ul>
+        <li><strong>存储翻倍</strong>：同一份数据在湖与仓各存一份，成本双倍，同步链路也双倍，任何一次 schema 变更都要上下游同时改造。</li>
+        <li><strong>时效撕裂</strong>：仓内数据 T+1 更新，湖内数据准实时但无人敢信，同一个指标两个口径，业务部门被迫在「准的慢」和「快的糙」之间二选一。</li>
+        <li><strong>湖无事务</strong>：数据湖本质是文件目录，没有 ACID 能力，无法优雅地更新、删除、修正迟到数据，并发读写更是险象环生。</li>
+        <li><strong>Schema 失控</strong>：读时模式（schema-on-read）意味着结构漂移只有读到时才暴露，脏数据在湖里静默发酵数月是常态。</li>
+        <li><strong>治理割裂</strong>：权限、血缘、数据质量标准分属两套体系，治理团队疲于在湖和仓之间「打补丁」。</li>
+      </ul>
+      <p>湖仓一体（Lakehouse）正是对这些问题的系统性回应：在廉价对象存储之上，用开放表格式（如 Iceberg）把数据库级别的事务、Schema 治理与并发控制能力「下沉」到存储层，让一份数据同时支撑报表、实时、AI 与检索等全部场景。三者对比如下：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>对比维度</th>
+            <th>数据仓库</th>
+            <th>数据湖</th>
+            <th>湖仓一体</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>存储成本</td>
+            <td>商业按容量计费，昂贵</td>
+            <td>对象存储/HDFS，廉价</td>
+            <td>与湖同底，一份存储多引擎复用</td>
+          </tr>
+          <tr>
+            <td>数据时效</td>
+            <td>以 T+1 批处理为主</td>
+            <td>可接流，但缺治理约束</td>
+            <td>批流一体，分钟级入湖即可查</td>
+          </tr>
+          <tr>
+            <td>Schema 管理</td>
+            <td>写时模式，变更僵硬</td>
+            <td>读时模式，完全失控</td>
+            <td>受控演进：可校验、可回滚、可分支</td>
+          </tr>
+          <tr>
+            <td>数据治理</td>
+            <td>成熟但相对封闭</td>
+            <td>治理能力近乎为零</td>
+            <td>继承仓的治理：血缘、权限、质量</td>
+          </tr>
+          <tr>
+            <td>ACID 事务</td>
+            <td>支持</td>
+            <td>不支持</td>
+            <td>表格式级快照隔离与并发读写</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>固定报表、经营分析</td>
+            <td>原始暂存、机器学习</td>
+            <td>BI + 实时 + ML + 检索全场景</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>一句话定位</strong>：湖仓一体 = 用数据湖的成本，拿到数据仓库的体验。它不是湖与仓的简单拼接，而是把「仓的能力」内建进「湖的底座」。
+      </div>
+
+      <p>湖仓一体最迷人的特性是<strong>一份数据、多引擎共享</strong>：Spark、Flink、Trino 等引擎通过统一的元数据服务读写同一张表，数据不再来回搬运。下图与示例可以直观感受这一点：</p>
+
+      <div class="diagram">
+        <svg width="560" height="205" viewBox="0 0 560 205" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="一份数据多引擎共享示意图">
+          <rect x="20" y="10" width="150" height="44" rx="8" fill="#0d9488"></rect>
+          <text x="95" y="38" text-anchor="middle" fill="#ffffff" font-size="14">Spark 批处理</text>
+          <rect x="205" y="10" width="150" height="44" rx="8" fill="#0d9488"></rect>
+          <text x="280" y="38" text-anchor="middle" fill="#ffffff" font-size="14">Flink 流计算</text>
+          <rect x="390" y="10" width="150" height="44" rx="8" fill="#0d9488"></rect>
+          <text x="465" y="38" text-anchor="middle" fill="#ffffff" font-size="14">Trino 交互查询</text>
+          <line x1="95" y1="118" x2="95" y2="70" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="88,69 102,69 95,58" fill="#94a3b8"></polygon>
+          <line x1="280" y1="118" x2="280" y2="70" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="273,69 287,69 280,58" fill="#94a3b8"></polygon>
+          <line x1="465" y1="118" x2="465" y2="70" stroke="#94a3b8" stroke-width="2"></line>
+          <polygon points="458,69 472,69 465,58" fill="#94a3b8"></polygon>
+          <rect x="130" y="122" width="300" height="56" rx="8" fill="#134e4a"></rect>
+          <text x="280" y="147" text-anchor="middle" fill="#ffffff" font-size="14">Iceberg 表 · lakehouse.dws_orders</text>
+          <text x="280" y="167" text-anchor="middle" fill="#99f6e4" font-size="12">ACID 事务 · Schema 演进 · 隐藏分区</text>
+          <text x="280" y="197" text-anchor="middle" fill="#64748b" font-size="12">同一份存储与元数据，多个引擎并发读写，数据不再来回搬运</text>
+        </svg>
+      </div>
+
+      <pre><code><span class="comment">-- 同一张 Iceberg 表 lakehouse.dws_trade_city，三个引擎直接访问，数据零搬运</span>
+
+<span class="comment">-- ① Trino：BI 看板即席查询，秒级返回（分析师视角）</span>
+SELECT city, SUM(pay_amount) AS gmv, COUNT(1) AS order_cnt
+FROM lakehouse.dws_trade_city
+WHERE dt BETWEEN '2026-10-30' AND '2026-11-04'
+GROUP BY city
+ORDER BY gmv DESC
+LIMIT 20;
+
+<span class="comment">-- ② Spark：每日离线回刷，覆盖式重写分区（快照隔离，读写互不阻塞）</span>
+INSERT OVERWRITE lakehouse.dws_trade_city PARTITION (dt = '2026-11-04')
+SELECT city, SUM(pay_amount) AS gmv, COUNT(1) AS order_cnt
+FROM lakehouse.ods_trade_orders
+WHERE dt = '2026-11-04'
+GROUP BY city;
+
+<span class="comment">-- ③ Flink CDC：业务库变更实时 upsert 写入同一张表，分钟级可查</span>
+<span class="comment">--    （动态表聚合后以 upsert 模式提交，需在建表时声明主键 dt + city）</span>
+INSERT INTO lakehouse.dws_trade_city
+SELECT DATE_FORMAT(order_time, 'yyyy-MM-dd') AS dt,
+       city, SUM(pay_amount) AS gmv, COUNT(1) AS order_cnt
+FROM kafka_binlog_orders
+GROUP BY DATE_FORMAT(order_time, 'yyyy-MM-dd'), city;</code></pre>
+
+      <div class="callout-best">
+        <strong>如何判断一个平台是不是真湖仓</strong>：看三个硬指标——① 元数据与数据文件是否开放解耦（换引擎不搬数据）；② 是否具备表级 ACID 与并发读写快照隔离；③ 批与流是否写入<strong>同一张表、同一套 Schema</strong>。三者缺一，都只是「有湖的仓」或「有仓的湖」。
+      </div>
+
+      <div class="callout-warn">
+        <strong>常见误区</strong>：把「数据扔进对象存储 + 起个 HDFS外表」当成湖仓一体。没有表格式层的事务与元数据管理，并发写入会互相覆盖，小文件会拖垮查询，Schema 漂移无人兜底——这不是架构升级，只是把仓库的文件搬了个家。
+      </div>
+
+      <p>把上述痛点反过来，就是本教程要带你抵达的<strong>目标平台画像</strong>：一份存储承载全场景、一次入湖即可查、一套 Schema 贯穿批流、一套治理覆盖湖上湖下。后续每一章，都是在为这个画像补齐一块拼图：</p>
+      <ul>
+        <li><strong>成本维度</strong>：对象存储 + Parquet 高压缩比，冷热分层后单位成本再降一档（<a href="storage.html">存储层</a>）。</li>
+        <li><strong>时效维度</strong>：CDC 流式入湖 + 分钟级快照可见，实时与离线不再二选一（<a href="integration.html">数据集成</a>）。</li>
+        <li><strong>性能维度</strong>：隐藏分区、分区裁剪与小文件治理，让秒级交互查询成为常态（<a href="optimization.html">性能调优</a>）。</li>
+        <li><strong>可信维度</strong>：血缘、质量、权限三位一体，湖上数据敢直接进经营报表（<a href="governance.html">数据治理</a>）。</li>
+      </ul>
+
+      <!-- ================= 二、技术栈全景 ================= -->
+      <h2 id="stack">技术栈全景</h2>
+      <p>本站把湖仓一体拆解为<strong>六层技术栈</strong>，自下而上逐层展开。每一层独立成章，既可按学习路线顺序精读，也可作为速查手册按需检索。每一层中的核心组件如下：</p>
+      <div class="card-grid">
+        <div class="card">
+          <h3>存储与表格式层</h3>
+          <p>
+            <span class="pill">HDFS</span>
+            <span class="pill">S3 / MinIO</span>
+            <span class="pill">Parquet</span>
+            <span class="pill">Iceberg</span>
+            <span class="pill">Hive Metastore</span>
+          </p>
+          <p>对象存储与开放表格式构成湖仓的单一可信底座，向上提供 ACID、Schema 演进与隐藏分区能力，是「换引擎不搬数据」的根本保证。</p>
+          <a class="card-link" href="storage.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>计算引擎层</h3>
+          <p>
+            <span class="pill">Spark</span>
+            <span class="pill">Flink</span>
+          </p>
+          <p>批流一体的计算心脏：Spark 承接大规模离线加工与 ML 训练，Flink 承接实时计算与 CDC 流式入湖，二者共享同一套表格式。</p>
+          <a class="card-link" href="compute.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>查询引擎层</h3>
+          <p>
+            <span class="pill">Trino</span>
+            <span class="pill">Doris</span>
+            <span class="pill">ClickHouse</span>
+          </p>
+          <p>面向人与看板的交互式查询和 OLAP 引擎：Trino 联邦查询、Doris 实时多维分析、ClickHouse 日志时序，秒级返回即席结果。</p>
+          <a class="card-link" href="query.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>数据集成层</h3>
+          <p>
+            <span class="pill">Kafka</span>
+            <span class="pill">Flink CDC</span>
+            <span class="pill">DataX</span>
+            <span class="pill">SeaTunnel</span>
+          </p>
+          <p>把业务数据库与日志流的增量数据实时、可靠地送入湖仓，是数据「活起来」的入口；批量同步与流式入湖双轨并行。</p>
+          <a class="card-link" href="integration.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>调度与资源层</h3>
+          <p>
+            <span class="pill">DolphinScheduler</span>
+            <span class="pill">YARN</span>
+          </p>
+          <p>用 DAG 编排上千个离线与实时任务，用 YARN 统一管控计算资源、多租户队列与配额，让平台从「能跑」走向「跑得稳」。</p>
+          <a class="card-link" href="scheduling.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>可观测性层</h3>
+          <p>
+            <span class="pill">Prometheus</span>
+            <span class="pill">Grafana</span>
+            <span class="pill">EFK</span>
+          </p>
+          <p>指标、日志、链路三位一体：让慢查询、任务失败、小文件堆积等问题在业务方感知之前被发现、告警与定位。</p>
+          <a class="card-link" href="observability.html">进入学习 →</a>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>阅读建议</strong>：六层技术栈是「纵向分层」，而业务数据是「横向流动」的——先到<a href="architecture.html">总体架构</a>页建立全局地图，再按学习路线逐层下钻，脉络最清晰。
+      </div>
+      <p>如果你习惯「先看问题再选章节」，下面这张速查表列出每一章回答的核心问题与建议阅读顺序：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>层次</th>
+            <th>对应章节</th>
+            <th>该章回答的核心问题</th>
+            <th>建议顺序</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>存储与表格式层</td>
+            <td><a href="storage.html">存储层</a></td>
+            <td>一份数据如何存得便宜、读得快、改得稳？</td>
+            <td>第 1 站</td>
+          </tr>
+          <tr>
+            <td>计算引擎层</td>
+            <td><a href="compute.html">计算层</a></td>
+            <td>批和流为什么要用两套引擎，又如何共享存储？</td>
+            <td>第 2 站</td>
+          </tr>
+          <tr>
+            <td>查询引擎层</td>
+            <td><a href="query.html">查询层</a></td>
+            <td>Trino / Doris / ClickHouse 各自的边界在哪里？</td>
+            <td>第 3 站</td>
+          </tr>
+          <tr>
+            <td>数据集成层</td>
+            <td><a href="integration.html">数据集成</a></td>
+            <td>业务库增量如何分钟级、不重不丢地入湖？</td>
+            <td>第 4 站</td>
+          </tr>
+          <tr>
+            <td>调度与资源层</td>
+            <td><a href="scheduling.html">调度资源</a></td>
+            <td>上千个任务如何编排、重跑并按租户隔离资源？</td>
+            <td>第 5 站</td>
+          </tr>
+          <tr>
+            <td>可观测性层</td>
+            <td><a href="observability.html">可观测</a></td>
+            <td>指标、日志、告警如何形成故障处置闭环？</td>
+            <td>第 6 站</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ================= 三、学习路线 ================= -->
+      <h2 id="roadmap">学习路线</h2>
+      <p>湖仓一体知识点庞杂，最大的学习风险是「碎片化收藏、从未系统打通」。下面是一条经过实践检验的四阶段进阶路线，每个阶段都有明确的产出检验，避免「看过等于会了」：</p>
+
+      <div class="arch-layer">① 打牢存储底座：对象存储 + Iceberg</div>
+      <p>先吃透 HDFS / S3-MinIO 的存储语义与 Parquet 的列存布局，再深入 Iceberg 的快照机制、元数据树（metadata.json → manifest list → manifest）、隐藏分区与 compaction。<strong>存储是湖仓一切能力的源头</strong>：引擎可以换，调度可以换，唯独表格式一旦选错，迁移成本极高。本阶段结束后，你应能独立回答「一次 UPDATE 在 Iceberg 里到底发生了什么」。<span class="tag">建议 2~3 周</span></p>
+      <ul>
+        <li>对应章节：<a href="storage.html">存储层</a></li>
+        <li>产出检验：用 MinIO + Iceberg 从零建库建表，并演示快照回滚与并发读写隔离。</li>
+      </ul>
+
+      <div class="arch-layer">② 引驾齐驱：Spark / Flink 批流一体 + Trino / Doris / ClickHouse</div>
+      <p>计算与查询是湖仓的「两驾马车」：Spark 解决大规模离线加工与资源模型，Flink 解决实时计算与流式入湖；Trino 提供交互式联邦查询，Doris 与 ClickHouse 提供实时 OLAP 与日志时序场景的极致性能。本阶段的关键不是背 API，而是理解<strong>每个引擎的资源模型与适用边界</strong>——什么时候用 Spark、什么时候 Trino 一条 SQL 就够。<span class="tag">建议 3~4 周</span></p>
+      <ul>
+        <li>对应章节：<a href="compute.html">计算层</a>、<a href="query.html">查询层</a></li>
+        <li>产出检验：用 Spark 跑通 T+1 分层加工，用 Flink CDC 实现分钟级入湖，用 Trino 完成看板查询。</li>
+      </ul>
+
+      <div class="arch-layer">③ 稳定运行：Kafka / CDC 集成、DolphinScheduler / YARN、可观测体系</div>
+      <p>数据进得来、任务跑得稳、故障看得见，平台才算「生产可用」。集成层解决数据如何实时可靠地入湖；调度层解决任务依赖、补数与多租户资源配额；可观测层用 Prometheus + Grafana + EFK 建立指标、日志、告警的闭环。本阶段是从「写 Demo」到「值生产班」的分水岭。<span class="tag">建议 2~3 周</span></p>
+      <ul>
+        <li>对应章节：<a href="integration.html">数据集成</a>、<a href="scheduling.html">调度资源</a>、<a href="observability.html">可观测</a></li>
+        <li>产出检验：设计一条带依赖、失败重试、告警规则的完整 DAG，并接入监控大盘。</li>
+      </ul>
+
+      <div class="arch-layer">④ 治理与实战：数据治理、性能调优、高阶场景</div>
+      <p>从「跑通」走向「跑好」：建立元数据、血缘、质量与安全体系；掌握分区裁剪、小文件治理、join 策略、内存调优等性能手段；最后把底座能力组合成情报研判、AI 检索、时空分析等高阶场景，并对照「数据湖仓一体架构师」的岗位要求查漏补缺。<span class="tag">建议 3~4 周</span></p>
+      <ul>
+        <li>对应章节：<a href="governance.html">数据治理</a>、<a href="optimization.html">性能调优</a>、<a href="scenarios.html">场景实战</a>、<a href="career.html">岗位进阶</a></li>
+        <li>产出检验：输出一份完整的平台架构设计文档，含容量估算、选型理由与容量水位监控方案。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>节奏建议</strong>：全路线约 10~14 周。每阶段坚持「先动手、再读文档、最后写复盘笔记」的循环；代码跑不通时优先查组件版本兼容矩阵，而不是盲目换版本。
+      </div>
+      <p>四阶段环环相扣：<strong>底座</strong>决定你能走多稳，<strong>引擎</strong>决定你能跑多快，<strong>运行体系</strong>决定你敢不敢上生产，<strong>治理与实战</strong>决定你能拿多高的职级报价。任何时候中断学习后回头，请先重读当前阶段对应的「产出检验」，用能否复现检验结果来判断从哪里续上，而不是从目录第一页重来。</p>
+
+      <!-- ================= 四、治理与实战 ================= -->
+      <h2 id="advanced">治理与实战</h2>
+      <p>完成四层基础学习后，以下四章帮你完成从「会用」到「能扛」的跨越，它们也是架构师面试与生产评审中最常被追问的主题：</p>
+      <div class="card-grid">
+        <div class="card">
+          <h3>数据治理</h3>
+          <p>元数据管理、血缘追踪、数据质量、数据安全与合规——治理不是口号，而是湖仓长期不腐化的免疫系统。</p>
+          <a class="card-link" href="governance.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>性能调优</h3>
+          <p>分区裁剪、小文件治理、join 策略、shuffle 与内存参数、物化视图与缓存——让同一套硬件跑出数倍吞吐。</p>
+          <a class="card-link" href="optimization.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>场景实战</h3>
+          <p>情报研判、AI 向量检索、时序分析、GIS 空间分析、图计算——把六层底座组合成业务真正买单的高阶能力。</p>
+          <a class="card-link" href="scenarios.html">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>岗位进阶</h3>
+          <p>数据湖仓一体架构师的能力模型、面试题拆解、架构设计答题框架与职业路径规划。</p>
+          <a class="card-link" href="career.html">进入学习 →</a>
+        </div>
+      </div>
+
+      <!-- ================= 五、适合谁读 ================= -->
+      <h2 id="readers">适合谁读</h2>
+      <p>本站内容按「数据湖仓一体架构师」的能力模型组织，以下三类读者都能各取所需：</p>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>平台架构师</strong>：需要全局视角做分层设计与技术选型，向管理层讲清楚「为什么这么建」。
+          <ul>
+            <li>重点阅读：总体架构、存储层、调度资源、岗位进阶</li>
+            <li>核心收获：六层参考架构、选型五原则、容量与成本测算方法</li>
+          </ul>
+        </div>
+        <div class="callout">
+          <strong>大数据开发工程师</strong>：每天与 Spark / Flink / Trino 作业为伴，要让任务跑得又快又稳。
+          <ul>
+            <li>重点阅读：计算层、查询层、数据集成、性能调优</li>
+            <li>核心收获：批流一体写法、CDC 链路搭建、参数级调优手段</li>
+          </ul>
+        </div>
+        <div class="callout">
+          <strong>数据治理岗</strong>：负责元数据、血缘、质量与安全，让湖里的数据可信可用可审计。
+          <ul>
+            <li>重点阅读：数据治理、可观测、存储层（元数据原理）</li>
+            <li>核心收获：基于表格式快照的血追体系、质量规则引擎、权限模型设计</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout-best">
+        <strong>下一步</strong>：如果你是第一次接触湖仓概念，建议从<a href="architecture.html">湖仓一体总体架构</a>开始，先建立六层全景地图，再进入各章细节；如果你已有实战经验，可直接跳到<a href="optimization.html">性能调优</a>与<a href="scenarios.html">场景实战</a>查漏补缺。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

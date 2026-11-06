@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>高阶场景实战 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（窄屏显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页定位</a>
+      <a href="#ontology">情报研判与本体建模</a>
+      <a href="#vector">AI 向量检索与 RAG</a>
+      <a href="#timeseries">时序分析</a>
+      <a href="#gis">GIS 时空分析</a>
+      <a href="#graph">图计算</a>
+      <a href="#multimodal">多模数据统一治理</a>
+      <a href="#decision">场景选型决策</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">高阶场景实战</h1>
+      <div class="page-intro">
+        前九章解决的是「底座怎么搭」，本页回答「底座怎么用」：情报研判与本体建模、AI 向量检索与 RAG、时序分析、GIS 时空分析、图计算五类高阶场景，如何落在一套湖仓底座上；最后给出多模数据统一入湖规范与场景选型决策表。读完本页，你将掌握「一套底座、多场景加速」的完整落地方法。
+      </div>
+
+      <p>本页的视角是<strong>自上而下</strong>的：先看业务场景对底座的诉求，再反推存储建模、索引设计与引擎分工。核心结论先行：<strong>场景不是新烟囱</strong>——五类场景共用同一份湖仓存储（对象存储 + 开放表格式 + 统一 Catalog），专用引擎与索引只做「加速层」，任何加速组件都必须可以从湖仓一键重建。这是全页反复出现的架构原则。</p>
+      <p>
+        <span class="pill">本体建模</span>
+        <span class="pill">向量检索</span>
+        <span class="pill">时序</span>
+        <span class="pill">时空</span>
+        <span class="pill">图计算</span>
+        <span class="tag">先修：总体架构 / 存储 / 治理</span>
+      </p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>情报研判</h3>
+          <p>本体建模 + 多源实体融合 + 图谱化研判，情报与风控的核心打法。</p>
+          <a class="card-link" href="#ontology">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>AI 检索</h3>
+          <p>知识原文入湖，向量做投影，RAG 建在湖仓而不是建在孤岛上。</p>
+          <a class="card-link" href="#vector">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>时序与时空</h3>
+          <p>设备指标降采样冷热分层；轨迹与空间数据按时间 + 网格双维度分区。</p>
+          <a class="card-link" href="#timeseries">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>图计算</h3>
+          <p>湖仓为体、图为用：图库只是可重建的查询加速投影。</p>
+          <a class="card-link" href="#graph">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>选型决策</h3>
+          <p>五类场景 × 多种模态的组件组合速查表，先看结论再回读细节。</p>
+          <a class="card-link" href="#decision">进入学习 →</a>
+        </div>
+        <div class="card">
+          <h3>多模治理</h3>
+          <p>结构化、JSON、时序、GIS、日志五类数据的一站式入湖规范。</p>
+          <a class="card-link" href="#multimodal">进入学习 →</a>
+        </div>
+      </div>
+
+      <!-- ================= 一、情报研判与本体建模 ================= -->
+      <h2 id="ontology">情报研判与本体建模</h2>
+      <p><strong>本体（Ontology）</strong>是对某个领域内「概念—实体—关系—属性」的形式化定义。放在情报研判语境里：现实世界中的<strong>实体</strong>（人物、组织、账户、地址、事件）、实体之间的<strong>关系</strong>（任职于、转账给、亲属、控股）、实体与关系上挂载的<strong>属性</strong>（姓名、金额、置信度、生效时间），共同构成一张可被程序理解的关系网络。本体是 Schema 层的「合同」，而湖仓中的实体表、关系表是它的物理承载——先有本体定义，再有表设计。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>本体要素</th>
+            <th>定义</th>
+            <th>湖仓承载</th>
+            <th>示例</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>实体 Entity</td>
+            <td>现实世界对象的数字化定义，有全局唯一 ID</td>
+            <td>实体表 dwd.entity_*（黄金记录）</td>
+            <td>人物、企业、银行账户、地址、事件</td>
+          </tr>
+          <tr>
+            <td>关系 Relation</td>
+            <td>实体间有类型、有方向、可带时间的关联</td>
+            <td>关系表 dwd.relation_*（时态建模）</td>
+            <td>转账、通讯、任职、股权、亲属</td>
+          </tr>
+          <tr>
+            <td>属性 Property</td>
+            <td>实体或关系上的特征值，规则字段 + 动态字段并存</td>
+            <td>固定列 + MAP 动态属性列</td>
+            <td>姓名、证件号、置信度、金额、时间段</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>多源融合：ID 归一与实体对齐</h3>
+      <p>情报研判的第一道工序，是把多个来源系统里「同一个人的多条记录」融合成<strong>一个统一实体</strong>。完整流程分五步：</p>
+      <ol>
+        <li><strong>候选生成（Blocking）</strong>：全量两两比较是 O(N²) 的灾难，必须先用强标识（证件号、注册号）等值分桶、弱标识（姓名 + 生日、姓名 + 地址）分组，把比较范围缩小几个数量级。</li>
+        <li><strong>相似度计算</strong>：对候选对做字段级相似度——编辑距离 / Jaro-Winkler 算姓名，精确匹配算证件，时间差算事件；进阶做法是训练二分类模型给出相似度分。</li>
+        <li><strong>判定分级</strong>：相似度高于自动合并阈值则机器合并；低于不合并阈值则放弃；中间区间进入人工复核队列。</li>
+        <li><strong>聚类归并</strong>：通过判定后做连通分量聚类，生成统一实体 ID；用「金标优先 + 新鲜度优先」打破链式合并（避免把不同人通过重名链路连成一人）。</li>
+        <li><strong>黄金记录生成（Golden Record）</strong>：按字段冲突消解规则（来源权重、更新时间、人工修正最高优先）合成实体终值，并保留全部来源 ID 以便溯源。</li>
+      </ol>
+
+      <pre><code>-- 实体对齐之候选生成（Blocking）：强标识精确对齐 + 弱标识分桶，控制两两比较规模
+WITH cand AS (
+  SELECT a.tmp_id AS id_a, b.tmp_id AS id_b,
+         a.cert_no, a.name_norm, a.birth_date
+  FROM stg.person_src a
+  JOIN stg.person_src b
+    ON (a.cert_no IS NOT NULL AND a.cert_no = b.cert_no)   <span class="comment">-- 强标识：证件号直接对齐</span>
+    OR (a.name_norm = b.name_norm                          <span class="comment">-- 弱标识：姓名+生日同桶</span>
+        AND a.birth_date = b.birth_date
+        AND a.cert_no IS NULL AND b.cert_no IS NULL)
+  WHERE a.tmp_id &lt; b.tmp_id                               <span class="comment">-- 只比较上三角，避免自比与重复对</span>
+)
+SELECT id_a, id_b,
+       jaro_winkler(name_norm, name_norm) AS name_sim
+FROM cand
+LIMIT 100000;</code></pre>
+
+      <h3>Palantir Foundry 式本体服务：架在湖仓上的分层</h3>
+      <p>Palantir Foundry 的核心产品理念之一就是「本体服务」：把底层表数据映射为业务可理解的对象、链接与动作，上层应用面向对象编程而不是面向表写 SQL。把这套理念搬到自建湖仓上，分层如下：</p>
+
+      <div class="arch-layer">本体 API 层：GraphQL / REST 统一语义入口 · 对象级与行级权限 · 实体/关系/动作三类原语</div>
+      <p>应用层只面向「对象」与「关系」编程：取一个人物对象、展开他的三类一度关系、发起一次动作（打标、加入研判清单）。权限在这一层收敛——同一个实体，不同角色看到不同属性子集。对应本站 <a href="governance.html">数据治理</a> 的权限模型。</p>
+      <div class="arch-layer">本体存储层：实体表 / 关系表 / 属性版本表 / 图加速投影（可随时从底座重建）</div>
+      <p>本体的物理形态就是湖仓里两类表：实体表存黄金记录，关系表存时态化关系；图加速投影（导入图库的副本）从属于这一层，定位是「缓存」而非「第二存储」。</p>
+      <div class="arch-layer">湖仓底座：对象存储 + Iceberg / ClickHouse / Doris + 统一 Catalog 与血缘</div>
+      <p>全部原始数据、融合规则结果、属性版本都落在底座上；实体融合作业本身就是 <a href="compute.html">计算层</a> 的一个 Spark/Flink 作业，其血缘由 <a href="governance.html">治理体系</a> 统一登记。</p>
+
+      <div class="callout">
+        <strong>关键认知</strong>：本体不是一个新的数据库，而是湖仓之上的一层「语义视图 + API 合约」。把业务数据再复制一份到独立「本体库」里存起来的做法，本质是新建烟囱——很快会面临两份数据的一致性问题。
+      </div>
+
+      <h3>建表示例：人物实体表 + 关系表</h3>
+      <pre><code>-- Flink SQL：人物实体表（多源 ID 归一后的黄金记录，v2 表支持流式 upsert）
+CREATE TABLE dwd.entity_person (
+  entity_id     STRING COMMENT '统一实体 ID：由对齐算法生成，全局唯一',
+  gold_id       STRING COMMENT '金标 ID：证件号/工商注册号等强标识',
+  name_norm     STRING COMMENT '归一化姓名：去空格、繁简转换后',
+  gender        STRING,
+  birth_date    DATE,
+  phone_list    ARRAY&lt;STRING&gt; COMMENT '多来源手机号去重集合',
+  src_ids       MAP&lt;STRING, STRING&gt; COMMENT '来源系统编码 -&gt; 原始主键，保留溯源链',
+  attr_merged   MAP&lt;STRING, STRING&gt; COMMENT '冲突消解后的属性终值',
+  source_cnt    INT COMMENT '融合来源数：衡量实体融合度',
+  is_gold       BOOLEAN COMMENT '是否人工确认的黄金记录',
+  update_time   TIMESTAMP,
+  PRIMARY KEY (entity_id) NOT ENFORCED
+) USING ICEBERG
+PARTITIONED BY (days(update_time))
+TBLPROPERTIES (
+  'format-version' = '2',
+  'write.target-file-size-bytes' = '134217728'
+);</code></pre>
+
+      <pre><code>-- Flink SQL：人物关系表（以“事实性关系”为粒度，支持时态查询与证据溯源）
+CREATE TABLE dwd.relation_person (
+  rel_id        STRING COMMENT '关系 ID：src+dst+rel_type+valid_from 的哈希',
+  src_entity_id STRING COMMENT '关系主体实体 ID',
+  dst_entity_id STRING COMMENT '关系客体实体 ID',
+  rel_type      STRING COMMENT '关系类型：亲属/同事/股权/转账/通讯…',
+  direction     STRING COMMENT '方向：OUT / IN / UNDIRECTED',
+  confidence    DECIMAL(4,3) COMMENT '抽取置信度：规则=1.0，模型按概率',
+  valid_from    DATE COMMENT '关系生效日',
+  valid_to      DATE COMMENT '失效日：NULL 表示仍有效（时态查询）',
+  evidence      ARRAY&lt;STRING&gt; COMMENT '证据片段引用：表名+主键+字段',
+  update_time   TIMESTAMP,
+  PRIMARY KEY (rel_id) NOT ENFORCED
+) USING ICEBERG
+PARTITIONED BY (bucket(16, src_entity_id))   <span class="comment">-- 按主体实体哈希分桶，多跳展开时数据局部性好</span>
+TBLPROPERTIES ('format-version' = '2');</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：关系表务必带 valid_from / valid_to 双时间列与 evidence 溯源列。研判场景最常问的是「某时点上这张关系网长什么样」，时态建模让答案可直接查出来；证据列则让每条关系都能一键回溯到原始记录，这是情报系统的合规底线。
+      </div>
+
+      <!-- ================= 二、AI 向量检索与 RAG ================= -->
+      <h2 id="vector">AI 向量检索与 RAG</h2>
+      <p>湖仓里的数据不只是表——文档、工单、规章、日志这些非结构化知识也要入湖，并支持<strong>语义检索</strong>：把文本切块（Chunk）、用 Embedding 模型转成向量，再按「语义距离」找相似内容。向量检索的落地方案按部署形态分三种路线：<strong>专用向量库、关系库扩展、搜索/OLAP 引擎内置</strong>，下表对比四个典型方案：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th>部署路线</th>
+            <th>向量索引能力</th>
+            <th>标量过滤与生态</th>
+            <th>适用与局限</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Milvus</td>
+            <td>专用向量库</td>
+            <td>HNSW / IVF 系列 / DiskANN，分片与副本独立扩展</td>
+            <td>独立服务，标量字段布尔表达式过滤</td>
+            <td>亿级以上向量、高 QPS 独立检索平台；代价是多一套组件运维与双写一致性</td>
+          </tr>
+          <tr>
+            <td>PostgreSQL + pgvector</td>
+            <td>关系库扩展</td>
+            <td>HNSW / IVF 索引，SQL 内完成 ANN 检索</td>
+            <td>原文与向量同库同事务，权限/时间/状态过滤复用完整 SQL 能力</td>
+            <td>中小规模企业知识库首选；单机容量与写入吞吐有上限</td>
+          </tr>
+          <tr>
+            <td>Elasticsearch KNN</td>
+            <td>搜索引擎内置</td>
+            <td>dense_vector + kNN（HNSW），关键词与语义混合检索</td>
+            <td>倒排索引 + BM25 全文生态成熟</td>
+            <td>已有 ES 栈、需要“关键词 + 语义”混合排序；向量规模大时内存成本高</td>
+          </tr>
+          <tr>
+            <td>Doris 向量能力</td>
+            <td>OLAP 引擎内置</td>
+            <td>向量类型与相似度函数，向量索引随版本演进（以所用版本官方文档为准）</td>
+            <td>WHERE / Join 完整 SQL，Multi-Catalog 直连湖仓数据</td>
+            <td>把向量检索嵌入多维 OLAP 分析；生态较新，超大规模 ANN 性能需自行验证</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>选型第一原则</strong>：知识原文与向量必须同库、同生命周期。原文放 A 系统、向量放 B 系统，一旦删除/更新不同步，就会出现“检索命中但原文已删”“原文更新向量还是旧语义”的脏状态——RAG 的可信度直接崩塌。
+      </div>
+
+      <h3>Embedding 表设计</h3>
+      <p>以 pgvector 为例，一张合格的 embedding 表要同时具备五要素：<strong>主键 + 原文列 + 向量列 + 分区/生命周期 + 溯源列</strong>：</p>
+      <pre><code>-- PostgreSQL（pgvector 扩展）：知识块 embedding 表
+CREATE TABLE ai.doc_chunk_embedding (
+  chunk_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,  <span class="comment">-- 主键：全局唯一</span>
+  doc_id      BIGINT NOT NULL,                                 <span class="comment">-- 溯源：回链湖仓原文表</span>
+  chunk_text  TEXT NOT NULL,                                   <span class="comment">-- 原文块：回显与引用必读，与向量同库</span>
+  chunk_vec   VECTOR(1024) NOT NULL,                            <span class="comment">-- 向量列：维度必须与 embedding 模型一致</span>
+  chunk_hash  VARCHAR(64) NOT NULL,                            <span class="comment">-- 内容指纹：模型升级时按 hash 幂等重嵌入</span>
+  model_ver   VARCHAR(32) NOT NULL,                            <span class="comment">-- 嵌入模型版本：评估与回滚依据</span>
+  dt          DATE NOT NULL DEFAULT CURRENT_DATE               <span class="comment">-- 逻辑分区键：按时间做生命周期管理</span>
+);
+
+-- HNSW 索引：余弦距离；m 控制图的连通度、ef_construction 控制构建召回
+CREATE INDEX idx_chunk_vec_hnsw ON ai.doc_chunk_embedding
+  USING HNSW (chunk_vec vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+
+CREATE INDEX idx_chunk_doc ON ai.doc_chunk_embedding (doc_id);
+
+-- 注：如需物理分区（PARTITION BY RANGE），向量索引对分区表的支持随 pgvector 版本演进，
+-- 生产前先在目标版本实测；常见做法是“按月建分区 + 各分区独立 HNSW 索引”。</code></pre>
+
+      <pre><code>-- 相似度检索：余弦距离排序取 TopK（:query_vec 为应用传入的向量参数）
+SET hnsw.ef_search = 100;   <span class="comment">-- 提高候选队列长度，用少量延迟换更高召回（默认 40）</span>
+
+SELECT chunk_id, doc_id, chunk_text,
+       1 - (chunk_vec &lt;=&gt; :query_vec::vector) AS cosine_sim
+FROM ai.doc_chunk_embedding
+WHERE dt &gt;= current_date - INTERVAL '6 months'   <span class="comment">-- 元数据过滤：时间、权限等条件必须下推到检索期</span>
+ORDER BY chunk_vec &lt;=&gt; :query_vec::vector
+LIMIT 5;</code></pre>
+
+      <h3>RAG 架构：建在湖仓上</h3>
+      <p>RAG（Retrieval-Augmented Generation）的本质是「先检索、后生成」：用户提问先转成向量，回湖仓知识表里检索最相关的原文块，把<strong>原文片段 + 问题</strong>一起拼进 Prompt 再交给大模型，让模型只做「受限引用作答」。架构流程如下：</p>
+
+      <div class="diagram">
+        <svg width="760" height="230" viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RAG over Lakehouse 架构示意图">
+          <defs>
+            <marker id="rag-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 z" fill="#334155"></path>
+            </marker>
+          </defs>
+          <rect x="20" y="40" width="130" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="85" y="64" text-anchor="middle" fill="#ffffff" font-size="14">用户提问</text>
+          <text x="85" y="84" text-anchor="middle" fill="#d1fae5" font-size="11">自然语言 Query</text>
+          <line x1="152" y1="68" x2="184" y2="68" stroke="#334155" stroke-width="2" marker-end="url(#rag-arrow)"></line>
+          <rect x="190" y="40" width="140" height="56" rx="8" fill="#14b8a6"></rect>
+          <text x="260" y="64" text-anchor="middle" fill="#ffffff" font-size="14">Query 向量化</text>
+          <text x="260" y="84" text-anchor="middle" fill="#ecfeff" font-size="11">Embedding 模型</text>
+          <line x1="332" y1="68" x2="364" y2="68" stroke="#334155" stroke-width="2" marker-end="url(#rag-arrow)"></line>
+          <rect x="370" y="40" width="250" height="56" rx="8" fill="#155e75"></rect>
+          <text x="495" y="61" text-anchor="middle" fill="#ffffff" font-size="14">湖仓知识表 ANN 检索</text>
+          <text x="495" y="82" text-anchor="middle" fill="#cffafe" font-size="11">pgvector/HNSW · TopK + 元数据过滤</text>
+          <line x1="495" y1="98" x2="495" y2="144" stroke="#334155" stroke-width="2" marker-end="url(#rag-arrow)"></line>
+          <rect x="370" y="148" width="250" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="495" y="169" text-anchor="middle" fill="#ffffff" font-size="14">拼装 Prompt</text>
+          <text x="495" y="190" text-anchor="middle" fill="#d1fae5" font-size="11">问题 + TopK 原文片段（附引用）</text>
+          <line x1="368" y1="176" x2="334" y2="176" stroke="#334155" stroke-width="2" marker-end="url(#rag-arrow)"></line>
+          <rect x="190" y="148" width="140" height="56" rx="8" fill="#14b8a6"></rect>
+          <text x="260" y="169" text-anchor="middle" fill="#ffffff" font-size="14">LLM 生成</text>
+          <text x="260" y="190" text-anchor="middle" fill="#ecfeff" font-size="11">受限引用作答</text>
+          <line x1="188" y1="176" x2="154" y2="176" stroke="#334155" stroke-width="2" marker-end="url(#rag-arrow)"></line>
+          <rect x="20" y="148" width="130" height="56" rx="8" fill="#475569"></rect>
+          <text x="85" y="169" text-anchor="middle" fill="#ffffff" font-size="14">回答输出</text>
+          <text x="85" y="190" text-anchor="middle" fill="#e2e8f0" font-size="11">引用可回溯到湖仓原文</text>
+        </svg>
+      </div>
+
+      <p>落成一条数据链路：<strong>全量原文与版本</strong>（含权限、血缘）始终存放在湖仓 Iceberg 表中；<strong>向量与检索投影</strong>（pgvector / Milvus / ES）只保存可再生的派生数据。两者之间靠批作业同步：切块 → 嵌入 → 写投影表，以 chunk_hash + 模型版本保证幂等；原文删除或更新时，投影在同一个事务边界内同步失效。</p>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：权限过滤必须在检索阶段完成（写进检索 SQL 的 WHERE 条件），绝不能“先检索 TopK、再事后裁剪”——那会出现命中数不足、且被裁剪本身泄漏信息存在性的问题。另外，Embedding 模型升级意味着全量重嵌入，一定要提前评估算力成本与灰度方案。
+      </div>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：RAG 的下限由检索质量决定——分块策略（按语义边界切、保留标题上下文）、嵌入模型选型（用标注评测集横向对比）、TopK 与重排（先 ANN 粗召回再精排）三件事做到位，比换更大的 LLM 更划算。
+      </div>
+
+      <!-- ================= 三、时序分析 ================= -->
+      <h2 id="timeseries">时序分析</h2>
+      <p>设备与指标时序数据有三个鲜明特征：<strong>持续高频写入、查询几乎总带时间范围、近热远冷</strong>。在湖仓中的建模要点是「宽分区 + 按时间聚簇」：时间既是分区键（裁剪的第一维度），也是聚簇排序键（扫描局部性），设备维度作为第二排序键服务单设备回放。</p>
+
+      <pre><code>-- Spark SQL：时序宽表建模（天分区 + 按时间/设备聚簇）
+CREATE TABLE dwd.ts_device_metric (
+  device_id     STRING,
+  metric_time   TIMESTAMP,
+  cpu_usage     DOUBLE,
+  mem_usage     DOUBLE,
+  disk_io_mbps  DOUBLE,
+  net_in_bps    BIGINT,
+  net_out_bps   BIGINT,
+  tags          MAP&lt;STRING, STRING&gt; COMMENT '动态标签：机房/型号/业务线'
+) USING ICEBERG
+PARTITIONED BY (days(metric_time))
+TBLPROPERTIES ('write.target-file-size-bytes' = '268435456');
+
+-- 聚簇排序：分区内文件按时间+设备排序，时间范围扫描获得最佳局部性
+ALTER TABLE dwd.ts_device_metric WRITE ORDERED BY (metric_time, device_id);</code></pre>
+
+      <p>当查询模式升级为「高并发监控大盘 + 秒级写入」时，把热明细交给 ClickHouse，用<strong>降采样物化视图</strong>控制查询成本：明细按原始精度只保留短周期，5 分钟粒度的均值/最大/最小则长期保留。用 AggregatingMergeTree 保存聚合中间态，跨批次合并时结果依然精确：</p>
+
+      <pre><code>-- ClickHouse：明细表（秒级写入，热数据在 SSD 策略卷上）
+CREATE TABLE ts.metric_raw
+(
+    device_id  String,
+    ts         DateTime,
+    cpu_usage  Float64,
+    mem_usage  Float64
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMMDD(ts)
+ORDER BY (device_id, ts)
+TTL ts + INTERVAL 7 DAY          <span class="comment">-- 兜底 TTL：明细默认仅保 7 天（冷热迁移见下文）</span>
+SETTINGS index_granularity = 8192, storage_policy = 'hot_cold';
+
+-- 降采样物化视图：秒级 -&gt; 5 分钟聚合，avgState/maxState 保存中间态
+CREATE MATERIALIZED VIEW ts.metric_5m
+ENGINE = AggregatingMergeTree
+PARTITION BY toYYYYMMDD(window_start)
+ORDER BY (device_id, window_start)
+AS
+SELECT
+    device_id,
+    toStartOfFiveMinute(ts) AS window_start,
+    avgState(cpu_usage)     AS cpu_avg_state,
+    maxState(cpu_usage)     AS cpu_max_state,
+    minState(cpu_usage)     AS cpu_min_state,
+    countState()            AS sample_cnt_state
+FROM ts.metric_raw
+GROUP BY device_id, window_start;
+
+-- 查询：Merge 系函数把中间态还原为最终聚合值
+SELECT device_id, window_start,
+       avgMerge(cpu_avg_state)   AS cpu_avg,
+       maxMerge(cpu_max_state)   AS cpu_max,
+       minMerge(cpu_min_state)   AS cpu_min,
+       countMerge(sample_cnt_state) AS samples
+FROM ts.metric_5m
+WHERE window_start &gt;= now() - INTERVAL 1 DAY
+GROUP BY device_id, window_start;</code></pre>
+
+      <h3>冷热分层与 TTL</h3>
+      <pre><code><span class="comment">&lt;!-- /etc/clickhouse-server/config.d/storage_policy.xml：热 SSD + 冷 HDD 两卷 --&gt;</span>
+&lt;storage_configuration&gt;
+    &lt;disks&gt;
+        &lt;ssd&gt;
+            &lt;path&gt;/data/clickhouse/hot/&lt;/path&gt;
+        &lt;/ssd&gt;
+        &lt;hdd&gt;
+            &lt;path&gt;/data/clickhouse/cold/&lt;/path&gt;
+        &lt;/hdd&gt;
+    &lt;/disks&gt;
+    &lt;policies&gt;
+        &lt;hot_cold&gt;
+            &lt;volumes&gt;
+                &lt;hot&gt;
+                    &lt;disk&gt;ssd&lt;/disk&gt;
+                &lt;/hot&gt;
+                &lt;cold&gt;
+                    &lt;disk&gt;hdd&lt;/disk&gt;
+                &lt;/cold&gt;
+            &lt;/volumes&gt;
+        &lt;/hot_cold&gt;
+    &lt;/policies&gt;
+&lt;/storage_configuration&gt;</code></pre>
+
+      <pre><code>-- 冷热分层：7 天内数据留在 SSD 热卷，之后迁到 HDD 冷卷，180 天后删除
+-- 降采样后的 5 分钟汇总表（metric_5m）不设删除 TTL，长期保留服务大盘回看
+ALTER TABLE ts.metric_raw
+    MODIFY TTL ts + INTERVAL 7 DAY TO VOLUME 'cold',
+               ts + INTERVAL 180 DAY DELETE;</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：三层保留策略——热明细（7~30 天，ClickHouse SSD）、温汇总（1~2 年，降采样表/湖仓 Parquet）、冷归档（全量原始，对象存储低频介质 + Iceberg 表按生命周期管理）。任何一层都可回溯重建，监控采集「点位数、写入延迟、分区体积」三个指标即可掌握时序水位。
+      </div>
+
+      <!-- ================= 四、GIS 时空分析 ================= -->
+      <h2 id="gis">GIS 时空分析</h2>
+      <p>轨迹、地址、网点、地理围栏这类数据天然带<strong>时间 × 空间双维度</strong>：查询往往既要圈时间范围，又要圈空间范围（「上周三环内所有订单轨迹」）。空间索引的核心思路是<strong>把二维空间编码成一维键</strong>，让「空间邻近」变成「键可比/键相等」，三个主流编码体系对比如下：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>编码体系</th>
+            <th>单元形状与层级</th>
+            <th>邻居与边界特性</th>
+            <th>优势与局限</th>
+            <th>典型用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GeoHash</td>
+            <td>矩形，base32 字符串，1–12 级，前缀即包含关系</td>
+            <td>相邻格前缀不一定连续，存在边界跳变</td>
+            <td>实现极简单，字符串前缀可直接比较；面积随纬度变形</td>
+            <td>简单地理圈选、缓存分片键</td>
+          </tr>
+          <tr>
+            <td>S2（Google）</td>
+            <td>球面四边形（立方体投影 + 希尔伯特曲线），64 位 CellID，0–30 级</td>
+            <td>沿希尔伯特曲线连续，区域覆盖运算（CellUnion）强</td>
+            <td>面积均匀、覆盖计算高效；API 相对小众，学习成本略高</td>
+            <td>地理围栏、区域覆盖、空间去重</td>
+          </tr>
+          <tr>
+            <td>H3（Uber）</td>
+            <td>六边形，16 级（res0–15），122 个基础格，64 位索引</td>
+            <td>六邻等距均匀，k-ring 直接扩展；每级保留 12 个五边形瑕疵格</td>
+            <td>邻居距离一致，天然适合密度与连通分析；周长/面积需查表换算</td>
+            <td>网格 Join、热力蜂窝、轨迹网格化</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>PostGIS / PostgreSQL 在湖仓体系中的定位</h3>
+      <p>PG + PostGIS 的角色是<strong>空间在线服务层</strong>，不是海量明细仓：业务系统要毫秒级响应的围栏判定、周边查询走它；批量空间计算（千万级轨迹 Join、格网聚合）回到湖仓的 Spark/Sedona 上做。两者分工如下：</p>
+      <ul>
+        <li><strong>湖仓侧</strong>：全量轨迹/空间明细 + 批量空间计算（Sedona：ST_Contains / ST_Intersects + 网格预筛）；</li>
+        <li><strong>PG 侧</strong>：加工后的轻量空间对象（围栏、网点、聚合结果）在线服务，GiST 索引毫秒级返回；</li>
+        <li><strong>同步方式</strong>：湖仓加工完成后由 CDC / 批作业同步到 PG，PG 数据同样「可再生」，与图库一个定位。</li>
+      </ul>
+
+      <pre><code>-- PostGIS 在线服务示例：地理围栏判定走 GiST 索引，毫秒级返回
+CREATE INDEX idx_track_geom ON geo.track_point USING GIST (geom);
+
+SELECT vehicle_id
+FROM geo.track_point
+WHERE ST_DWithin(geom::geography,
+                 ST_SetSRID(ST_MakePoint(116.397, 39.909), 4326)::geography,
+                 500);   <span class="comment">-- 500 米范围内（geography 类型按“米”计算）</span></code></pre>
+
+      <h3>Spark 空间 Join：网格键优化</h3>
+      <p>两个空间表直接 Join 是 O(N×M) 的笛卡尔灾难。优化套路是<strong>先网格编码、再键值 Join、后精确精筛</strong>：</p>
+
+      <pre><code>-- Spark SQL：为两侧点表预计算 H3 网格键（res9 边长约 170 米），把“空间邻近”转为“键相等”
+-- h3_* 为注册的 H3 UDF；POI 侧做 k=1 邻域扩展（每点 7 格），解决点落在格边界时的漏配
+WITH order_grid AS (
+  SELECT order_id, o_lon, o_lat,
+         h3_latlng_to_cell(o_lat, o_lon, 9) AS h3_cell
+  FROM dwd.orders_geo
+  WHERE dt = current_date()
+),
+poi_exp AS (
+  SELECT poi_id, p_lon, p_lat, cell AS h3_cell
+  FROM dim.poi
+  LATERAL VIEW explode(h3_k_ring(h3_latlng_to_cell(p_lat, p_lon, 9), 1)) t AS cell
+)
+SELECT o.order_id, p.poi_id,
+       haversine_m(o.o_lon, o.o_lat, p.p_lon, p.p_lat) AS dist_m  <span class="comment">-- 精筛：注册的球面距离 UDF（米）</span>
+FROM order_grid o
+JOIN poi_exp p ON o.h3_cell = p.h3_cell
+WHERE haversine_m(o.o_lon, o.o_lat, p.p_lon, p.p_lat) &lt;= 500;     <span class="comment">-- 只保留 500 米内的精确命中</span></code></pre>
+
+      <ul>
+        <li><strong>广播小表</strong>：dim 侧数据量小时广播 Join，进一步省掉 shuffle；</li>
+        <li><strong>多边形 Join</strong>：点在多边形内（围栏命中）用 Sedona ST_Contains，同样先网格预筛再精筛；</li>
+        <li><strong>分辨率选择</strong>：网格越细扫描越省、但文件数越多——按“单网格平均点数 / 查询半径”权衡，没有万能 res。</li>
+      </ul>
+
+      <h3>时空复合分区设计</h3>
+      <pre><code>-- Iceberg：时间 + 空间双维度分区（时间在前裁剪主维度，网格在后缩小扫描）
+CREATE TABLE dwd.ts_geo_track (
+  vehicle_id   STRING,
+  track_time   TIMESTAMP,
+  lon          DOUBLE,
+  lat          DOUBLE,
+  speed_kmh    DOUBLE,
+  h3_r4        BIGINT COMMENT 'H3 res4 网格（边长约 22km），物化后作空间分区键'
+) USING ICEBERG
+PARTITIONED BY (days(track_time), h3_r4)
+TBLPROPERTIES (
+  'format-version' = '2',
+  'write.distribution-mode' = 'hash'   <span class="comment">-- 写入端按分区哈希分布，避免小文件倾斜</span>
+);</code></pre>
+      <p>设计要点：时间分区永远放在<strong>最前面</strong>（绝大多数查询先圈时间）；空间网格分辨率取「活跃格子数千级别」为宜（res4 单格约 22km，全国陆域数千活跃格），配合天分区后单分区文件数适中，不会触发小文件问题。查询「上周、北京五环内」时，引擎先裁剪 7 个天分区、再在各分区内只扫十几个网格的文件。</p>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：坐标系必须在入湖前统一（国内业务常见 WGS84 / GCJ02 / BD09 混用），并在元数据中登记坐标系属性。隐式坐标系混用是最隐蔽的空间数据事故——地图上「偏 500 米」，排查成本极高。
+      </div>
+
+      <!-- ================= 五、图计算 ================= -->
+      <h2 id="graph">图计算</h2>
+      <p>实体与关系建好之后（见<a href="#ontology">本体建模</a>），业务很快会提出两类诉求：<strong>在线图查询</strong>（多跳展开、路径查找、子图可视化，要求低延迟）与<strong>离线图算法</strong>（PageRank、社区发现、连通分量，要求大吞吐）。先看选型：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th>定位</th>
+            <th>查询语言与规模</th>
+            <th>与湖仓的关系</th>
+            <th>适用场景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Neo4j</td>
+            <td>OLTP 属性图数据库</td>
+            <td>Cypher；单机到中等集群，生态最成熟</td>
+            <td>从湖仓导数建图库副本，图库可随时重建</td>
+            <td>中小规模图、交互式探索、可视化研判</td>
+          </tr>
+          <tr>
+            <td>NebulaGraph</td>
+            <td>分布式图数据库</td>
+            <td>nGQL；share-nothing，十亿级点边</td>
+            <td>Exchange 工具直接读 Hive/Iceberg 批量导入</td>
+            <td>超大图、高并发在线图查询</td>
+          </tr>
+          <tr>
+            <td>Spark GraphX / GraphFrames</td>
+            <td>湖仓上的批量图算法引擎</td>
+            <td>Scala API；规模随集群线性扩展</td>
+            <td>数据不出湖仓，算完回写 ADS 层</td>
+            <td>PageRank、社区发现、连通分量等离线算法</td>
+          </tr>
+          <tr>
+            <td>图 ETL（自建管线）</td>
+            <td>湖仓内点/边关系表本身</td>
+            <td>标准 SQL 即可做一跳/二跳分析</td>
+            <td>实体表/关系表就是图的唯一事实源</td>
+            <td>简单关系查询、算法原型的快速验证</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="arch-layer">图查询加速层：Neo4j / NebulaGraph 只做在线多跳、路径与子图展开（可随时从底座重建）</div>
+      <div class="arch-layer">图算法层：GraphFrames 在湖仓算力上批量计算 PageRank / 社区发现，结果回写 ADS 层</div>
+      <div class="arch-layer">湖仓底座：dwd.entity_person / dwd.relation_person 是实体关系的唯一事实源</div>
+
+      <p>这就是<strong>「湖仓为体、图为用」</strong>：图数据由湖仓 ETL 生成，图库只做查询加速。判断一个图平台设计是否健康，就问一句——「把图库全部删掉，多长时间能从湖仓重建出来？」答不上来或要重建一个月，说明事实源已经漂移到了图库，架构开始腐化。</p>
+
+      <h3>示例：从 Iceberg 关系表构建人物关系图</h3>
+      <ol>
+        <li><strong>湖仓定义点边</strong>：实体表、关系表是唯一事实源，图的 Schema 只是其投影；</li>
+        <li><strong>ETL 导出</strong>：Spark 作业把点/边投影为 CSV/Parquet 文件；</li>
+        <li><strong>批量导入</strong>：全量初始化用离线导入工具（最快），增量用在线导入；</li>
+        <li><strong>图查询加速</strong>：在线多跳、路径、可视化在图库完成；</li>
+        <li><strong>算法回写</strong>：图算法在湖仓算力层执行，结果回写 ADS 层供 BI 与服务消费。</li>
+      </ol>
+
+      <pre><code>-- 第 1 步（Spark SQL）：从湖仓投影点表（每日增量窗口）
+SELECT entity_id, name_norm AS name, gender
+FROM dwd.entity_person
+WHERE update_time &gt;= date_trunc('day', current_timestamp) - INTERVAL '7' DAY;
+
+-- 第 2 步：投影边表（仅保留有效关系，附带类型与置信度）
+SELECT src_entity_id AS src_id, dst_entity_id AS dst_id,
+       rel_type, confidence AS conf
+FROM dwd.relation_person
+WHERE valid_to IS NULL OR valid_to &gt;= current_date;</code></pre>
+
+      <pre><code># 第 3 步（Shell）：Neo4j 5 离线全量导入，数千万级点边比 LOAD CSV 快一个量级
+./bin/neo4j-admin database import full person_graph \
+  --nodes=Person=/data/graph/person_vertices.csv \
+  --relationships=RELATED=/data/graph/person_edges.csv \
+  --id-type=string --overwrite-destination</code></pre>
+
+      <pre><code>// 第 3 步（Cypher，在线增量导入）：MERGE 保证幂等，可按日重放
+LOAD CSV WITH HEADERS FROM 'file:///person_edges_delta.csv' AS row
+MATCH (a:Person {entity_id: row.src_id})
+MATCH (b:Person {entity_id: row.dst_id})
+MERGE (a)-[r:RELATED {type: row.rel_type}]-&gt;(b)
+ON CREATE SET r.conf = toFloat(row.conf), r.created = date();</code></pre>
+
+      <pre><code>// 第 5 步（Scala，GraphFrames）：图算法留在湖仓算力层，结果回写 ADS 层
+import org.apache.spark.sql.functions.col
+import org.graphframes._
+
+val vertices = spark.read.table("dwd.entity_person")
+  .withColumnRenamed("entity_id", "id")
+val edges = spark.read.table("dwd.relation_person")
+  .select(col("src_entity_id").as("src"), col("dst_entity_id").as("dst"))
+
+val g = GraphFrame(vertices, edges)
+g.pageRank.resetProbability(0.15).maxIter(10).run()
+  .vertices
+  .writeTo("ads.entity_pagerank").append()   <span class="comment">// 目标表先建好，算法结果进湖仓供全站消费</span></code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：图库定位是「可随时重建的加速投影」。建一条从湖仓到图库的自动化管线（全量初始化 + 每日增量 MERGE），把「重建耗时」做进监控指标——它既是架构健康度指标，也是灾备答案。
+      </div>
+
+      <!-- ================= 六、多模数据统一治理 ================= -->
+      <h2 id="multimodal">多模数据统一治理</h2>
+      <p>以上五个场景加起来，湖仓实际要承接<strong>结构化、半结构化 JSON、时序、GIS、日志</strong>五类模态。多模不等于各自为政：一模态一份入湖规范，但元数据、血缘、权限、生命周期四套模型必须全站统一。规范表如下：</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>数据模态</th>
+            <th>推荐入湖格式与组织</th>
+            <th>分区与聚簇</th>
+            <th>核心质量规则</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>结构化（业务库 / CDC）</td>
+            <td>Parquet + Iceberg（v2 主键表，MERGE INTO 更新）；原始快照留 Bronze 层</td>
+            <td>days(业务日期) 天分区 + bucket(主键) 聚簇</td>
+            <td>主键唯一、非空率、行数波动阈值、枚举值域校验</td>
+          </tr>
+          <tr>
+            <td>半结构化（JSON / JSONL）</td>
+            <td>原始 JSONL 按天落对象存储（不可变 Bronze）；解析后 Parquet 入 Silver</td>
+            <td>days(ingest_time) + 来源系统维度</td>
+            <td>解析成功率阈值、Schema 演进向后兼容（新增字段必须可空）、超大字段监控</td>
+          </tr>
+          <tr>
+            <td>时序（设备 / 指标）</td>
+            <td>Iceberg 全量 + ClickHouse 热明细；降采样表长期保留</td>
+            <td>days(metric_time) + CLUSTER BY（时间、设备）</td>
+            <td>乱序率、断点（gap）检测、重复点位率、采集延迟分布</td>
+          </tr>
+          <tr>
+            <td>GIS（轨迹 / 空间对象）</td>
+            <td>Parquet 存 WKB/WKT 列（或 GeoParquet）；网格键物化列</td>
+            <td>days(时间) + H3 网格双维度分区</td>
+            <td>坐标系一致性（统一 WGS84 并登记）、空间有效性（ST_IsValid）、越界点剔除</td>
+          </tr>
+          <tr>
+            <td>日志（应用 / 访问）</td>
+            <td>原始文本 + 解析后 Parquet（解析失败行保留 raw_line 兜底）</td>
+            <td>hours(事件时间) / days + 来源应用维度</td>
+            <td>格式匹配率、延迟到达率、日志级别分布突变告警</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>统一元数据与血缘</h3>
+      <p>五类模态全部在<strong>同一个 Catalog</strong>登记：表、列、分区键、坐标系、质量规则、责任人、血缘、权限，一个不多、一个不少。血缘的采集不靠人手工登记，而是让调度与计算框架自动上报（OpenLineage 事件）：</p>
+
+      <pre><code><span class="comment"># OpenLineage 事件（结构示意）：Flink CDC 作业写 Iceberg 实体表，自动上报输入输出</span>
+job:
+  namespace: lakehouse_pipelines
+  name: ods_to_dwd_person
+inputs:
+  - namespace: postgres://cdc-source
+    name: biz.person
+outputs:
+  - namespace: iceberg://lakehouse
+    name: dwd.entity_person</code></pre>
+
+      <p>血缘的价值在多模环境里被放大：知识表被哪些 RAG 应用消费、实体表由哪些来源系统融合而来、图库投影从哪张关系表生成——这些跨模态的链路只有统一登记后，<strong>变更影响分析</strong>（改上游前先看下游有谁）与<strong>数据溯源</strong>（回答里引用的原文从哪来）才可能一键完成。治理细节见 <a href="governance.html">数据治理</a>。</p>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：模态可以分化、引擎可以多选，但「Catalog / 血缘 / 权限 / 生命周期」四件套必须收敛到一套。评估任何新组件的接入成本时，就看它愿不愿意把元数据交回统一 Catalog——不愿意的，都要按<strong>嫌疑烟囱</strong>对待。
+      </div>
+
+      <!-- ================= 七、场景选型决策 ================= -->
+      <h2 id="decision">场景选型决策</h2>
+      <p>把全页收敛成一张决策表。用法：先对号入座找到场景特征，再看推荐组合与关键取舍，最后回到对应章节核对落地细节。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>场景特征</th>
+            <th>推荐底座组件组合</th>
+            <th>关键取舍与要点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>情报研判：多源实体融合 + 多跳关联</td>
+            <td>Iceberg 实体/关系表（唯一事实源）+ Spark 融合与 GraphFrames 算法 + Trino 联邦 + Neo4j/NebulaGraph 在线探索</td>
+            <td>图库只做可重建投影；融合规则沉淀在 ETL 而非图库</td>
+          </tr>
+          <tr>
+            <td>企业知识库 AI 问答</td>
+            <td>Iceberg 存原文与版本 + pgvector（或 Milvus）检索投影 + LLM 网关</td>
+            <td>原文与向量同生命周期；权限在检索期过滤；chunk_hash 幂等重嵌入</td>
+          </tr>
+          <tr>
+            <td>监控 / IoT 高并发指标大盘</td>
+            <td>ClickHouse 热明细 + AggregatingMergeTree 降采样 MV + Iceberg 冷归档</td>
+            <td>明细短 TTL、汇总长保留；先降采样再谈加机器</td>
+          </tr>
+          <tr>
+            <td>运营报表：多维交互分析</td>
+            <td>Trino / Doris 直查 Iceberg + 物化视图与缓存</td>
+            <td>数据规模中等时优先减少搬运，不轻易再建一份存储</td>
+          </tr>
+          <tr>
+            <td>轨迹与时空调度</td>
+            <td>Iceberg 时空双分区 + Spark/Sedona 批算 + PostGIS 在线服务层</td>
+            <td>批量与在线分离；网格分辨率按文件数与扫描量平衡</td>
+          </tr>
+          <tr>
+            <td>复杂网络挖掘（社群 / 风险传导）</td>
+            <td>GraphFrames 批计算 + 结果回写 ADS 层 + 图库仅前端探索</td>
+            <td>算法算力放湖仓，图库轻量化、可丢弃</td>
+          </tr>
+          <tr>
+            <td>全模态混合（表 + 文本 + 时序 + 空间 + 日志）</td>
+            <td>一套 Catalog / 血缘 / 权限 + 各模态专用索引与引擎</td>
+            <td>存储必须收敛，引擎允许分化；新组件必须可从湖仓重建</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>底座收敛原则</strong>：引擎可以多，存储必须少。每引入一个新组件，先回答三个问题——元数据是否回归统一 Catalog？数据是否可从湖仓一键重建？下线它的退出成本是多少？三问皆过，才允许进生产。
+      </div>
+
+      <p>场景吃透之后，下一步是把全站知识收敛为个人能力：岗位能力模型、JD 解读与面试准备，见 <a href="career.html">岗位进阶</a>。</p>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

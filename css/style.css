@@ -1,0 +1,592 @@
+/* ==========================================================================
+   数据湖仓一体教程 · 全站共享样式（css/style.css）
+   浅色主题 / 深青蓝点缀 · 零外部依赖 · file:// 协议双击直接可用
+   ========================================================================== */
+
+/* ---------- 1. CSS 变量（全站色彩与基础值） ---------- */
+:root {
+  --primary: #0f766e;        /* 深青蓝主色 */
+  --primary-light: #14b8a6;  /* 主色亮色（hover / 渐变端点） */
+  --primary-tint: #f0fdfa;   /* 主色浅底（介绍框 / 标签底 / hover 底） */
+  --bg: #f8fafc;             /* 页面背景 */
+  --surface: #ffffff;        /* 卡片 / 面板表面 */
+  --text: #1e293b;           /* 正文文字 */
+  --text-muted: #64748b;     /* 次要文字 */
+  --border: #e2e8f0;         /* 通用边框 */
+  --code-bg: #0f172a;        /* 代码块深色底 */
+  --code-text: #e2e8f0;      /* 代码块文字 */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 10px 28px rgba(15, 23, 42, 0.14);
+}
+
+/* ---------- 2. 全局 reset 与基础排版 ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--primary-light);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 2px;
+}
+
+img,
+svg {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+::selection {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ---------- 3. 顶部导航 ---------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.logo:hover {
+  color: var(--primary-light);
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.site-nav a {
+  padding: 8px 7px;
+  font-size: 13.5px;
+  color: var(--text);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.site-nav a:hover {
+  color: var(--primary);
+  background: var(--primary-tint);
+}
+
+.site-nav a.active {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 2px;
+}
+
+/* 汉堡按钮：默认隐藏，<=1024px 显示 */
+.nav-toggle {
+  display: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 18px;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.nav-toggle:hover {
+  background: var(--primary-tint);
+}
+
+/* ---------- 4. 页面布局：左目录 + 右内容 ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 32px;
+  padding: 32px 0 16px;
+}
+
+.content {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* 锚点跳转时避开 sticky 顶栏 */
+.content [id] {
+  scroll-margin-top: 88px;
+}
+
+/* ---------- 5. 左侧本页导航（.toc） ---------- */
+.toc {
+  position: sticky;
+  top: 84px;
+  align-self: start;
+  max-height: calc(100vh - 108px);
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.toc-title {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.toc a {
+  display: block;
+  padding: 6px 10px;
+  border-left: 2px solid transparent;
+  border-radius: 0 6px 6px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.toc a:hover {
+  color: var(--primary);
+  background: var(--primary-tint);
+  border-left-color: var(--primary);
+}
+
+/* ---------- 6. 内容排版（h1 / h2 / h3 / p / 列表） ---------- */
+.content h1 {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.content h2 {
+  margin: 40px 0 16px;
+  padding-left: 14px;
+  border-left: 4px solid var(--primary);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.content h3 {
+  margin: 28px 0 12px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.content p {
+  margin: 12px 0;
+}
+
+.content ul,
+.content ol {
+  margin: 12px 0;
+  padding-left: 26px;
+}
+
+.content li {
+  margin: 6px 0;
+}
+
+.content li::marker {
+  color: var(--primary);
+}
+
+/* ---------- 7. 页面开头介绍框 ---------- */
+.page-intro {
+  margin-bottom: 28px;
+  padding: 18px 20px;
+  background: var(--primary-tint);
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  font-size: 15.5px;
+}
+
+/* ---------- 8. 提示框（普通 / 警告 / 最佳实践） ---------- */
+.callout,
+.callout-warn,
+.callout-best {
+  margin: 20px 0;
+  padding: 14px 18px;
+  border-left: 4px solid;
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.callout {
+  background: #eff6ff;        /* 浅蓝底 */
+  border-left-color: #3b82f6;
+}
+
+.callout-warn {
+  background: #fefce8;        /* 浅黄底 */
+  border-left-color: #eab308;
+}
+
+.callout-best {
+  background: #f0fdf4;        /* 浅绿底 */
+  border-left-color: #22c55e;
+}
+
+.callout strong {
+  color: #1d4ed8;
+}
+
+.callout-warn strong {
+  color: #a16207;
+}
+
+.callout-best strong {
+  color: #15803d;
+}
+
+/* ---------- 9. 表格（表头深色底白字 + 斑马纹） ---------- */
+.content table {
+  width: 100%;
+  margin: 20px 0;
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: 14.5px;
+}
+
+.content th,
+.content td {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+.content th {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.content tbody tr:nth-child(even) {
+  background: #f1f5f9;
+}
+
+.content tbody tr:hover {
+  background: var(--primary-tint);
+}
+
+/* ---------- 10. 代码块与行内代码 ---------- */
+code {
+  font-family: Consolas, Menlo, "Courier New", monospace;
+  font-size: 0.9em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #eef2f6;
+  color: var(--text);
+}
+
+pre {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* 代码块内注释手动高亮：<span class="comment">...</span> */
+pre .comment {
+  color: #7ee787;
+}
+
+/* ---------- 11. 卡片网格 ---------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-light);
+}
+
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.card p {
+  margin: 0 0 14px;
+  font-size: 14.5px;
+  color: var(--text-muted);
+  flex: 1 0 auto;
+}
+
+.card .card-link {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.card .card-link:hover {
+  color: var(--primary-light);
+}
+
+/* ---------- 12. 两栏网格 ---------- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin: 20px 0;
+}
+
+/* ---------- 13. 小标签 ---------- */
+.pill,
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--primary-tint);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+
+.tag {
+  border-radius: 6px;
+}
+
+/* ---------- 14. 内联 SVG 架构图容器 ---------- */
+.diagram {
+  margin: 20px 0;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.diagram svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+
+/* ---------- 15. CSS 绘制的分层架构条 ---------- */
+.arch-layer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 10px 0;
+  padding: 14px 20px;
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+  border-radius: 10px;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+/* ---------- 16. 返回顶部按钮 ---------- */
+.btn-top {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 200;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 0.2s, visibility 0.2s, transform 0.2s, background-color 0.2s;
+}
+
+.btn-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.btn-top:hover {
+  background: var(--primary-light);
+}
+
+/* ---------- 17. 页脚 ---------- */
+.site-footer {
+  margin-top: 48px;
+  padding: 28px 0;
+  border-top: 1px solid var(--border);
+  background: #f1f5f9;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.site-footer p {
+  margin: 4px 0;
+}
+
+/* ---------- 18. 响应式：<=1024px（导航折叠为下拉面板，布局单列） ---------- */
+@media (max-width: 1024px) {
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .site-nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 10px 24px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .site-nav.open {
+    display: flex;
+  }
+
+  .site-nav a {
+    padding: 10px 12px;
+    font-size: 15px;
+    border-radius: 8px;
+  }
+
+  .site-nav a.active {
+    text-underline-offset: 4px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-top: 24px;
+  }
+
+  .toc {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* ---------- 19. 响应式：<=720px 小屏微调 ---------- */
+@media (max-width: 720px) {
+  .container {
+    padding: 0 16px;
+  }
+
+  .content h1 {
+    font-size: 26px;
+  }
+
+  .content h2 {
+    font-size: 21px;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-top {
+    right: 16px;
+    bottom: 16px;
+  }
+}

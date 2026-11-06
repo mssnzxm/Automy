@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据集成层 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：目录 + 正文 ============ -->
+  <div class="container layout">
+
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本页简介</a>
+      <a href="#positioning">本层定位：两条入湖通道</a>
+      <a href="#kafka">Apache Kafka：实时主干</a>
+      <a href="#flink-cdc">Flink CDC：无锁数据捕获</a>
+      <a href="#pipeline">实时入湖链路架构</a>
+      <a href="#batch">批式集成</a>
+      <a href="#capacity">容量规划方法</a>
+      <a href="#boundary">适用边界</a>
+    </aside>
+
+    <main class="content">
+
+      <h1 id="intro">数据集成层：Kafka + Flink CDC 入湖</h1>
+      <div class="page-intro">
+        数据集成层解决"数据如何又快又稳地进湖"：批式同步负责存量与低时效数据，
+        实时 CDC 负责增量与分钟级时效数据，而 Kafka 是实时链路的"主动脉"。
+        本页从 Kafka 机制、Flink CDC 原理、端到端一致性语义，到链路架构、容量规划与适用边界，
+        完整拆解湖仓一体的数据接入体系。
+      </div>
+
+      <!-- ==================== 本层定位 ==================== -->
+      <h2 id="positioning">本层定位：两条入湖通道</h2>
+      <p>
+        湖仓一体的存储底座（对象存储 + 开放表格式）只回答"数据以什么形态放"，
+        数据集成层回答"数据从哪里来、多久到、以什么一致性保证到"。工程上收敛为两条通道：
+      </p>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>批式同步通道</strong>：定时（小时/天级）全量或增量抽取业务库数据，
+            经 Spark/DataX 等工具清洗后写入 Iceberg。链路简单、回溯容易、成本低，
+            适合维表快照、低时效报表、冷数据归档。
+        </div>
+        <div class="callout">
+          <strong>实时 CDC 通道</strong>：捕获数据库 binlog 的行级变更，
+            经 Flink CDC → Kafka → Flink 加工后以 upsert 语义写入 Iceberg，
+            分钟级（可至秒级）数据可见，适合实时大屏、风控、监控类消费。
+        </div>
+      </div>
+
+      <p>两条通道最终汇入同一份湖仓存储，整体分层如下：</p>
+      <div class="arch-layer">业务数据源：MySQL / Postgres / Oracle / 日志 / 第三方 API</div>
+      <div class="arch-layer">捕获与传输：Flink CDC（无锁快照 + binlog 订阅）· 批式同步（DataX/Spark）</div>
+      <div class="arch-layer">实时主干：Kafka（分区/副本/持久化，削峰 + 多订阅 + 重放）</div>
+      <div class="arch-layer">流式加工：Flink 消费 → 清洗 / 维表关联 / 聚合（ODS → DWD）</div>
+      <div class="arch-layer">湖仓落地：Iceberg on 对象存储（快照提交，支持 upsert 与 Schema 演进）</div>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：两条通道不是二选一——同一张表可以"实时通道保时效、每日批通道保对账"。
+          以 Kafka 为中心的实时主干天然支持多个下游（Flink 加工、审计落档、风控旁路）订阅同一份数据流。
+      </div>
+
+      <!-- ==================== Apache Kafka ==================== -->
+      <h2 id="kafka">Apache Kafka：实时主干</h2>
+
+      <h3>核心机制：分区 / 副本 / ISR</h3>
+      <p>
+        Kafka 是分布式提交日志（Commit Log），<span class="tag">实时链路的主动脉</span>。三个核心概念决定了它的吞吐、
+        顺序与可靠语义：
+      </p>
+      <ul>
+        <li><strong>分区（Partition）</strong>：Topic 的并行单位。同一分区内的消息严格有序，
+          分区数直接决定生产与消费的并行度上限；key 相同的消息哈希到同一分区，是"按 key 保序"的基础。</li>
+        <li><strong>副本（Replica）</strong>：每个分区有 1 个 Leader 副本与 N-1 个 Follower 副本，
+          读写都走 Leader，Follower 异步拉取同步；副本分布在不同 broker 以容忍机器故障。</li>
+        <li><strong>ISR（In-Sync Replicas）</strong>：与 Leader 保持同步的副本集合（含 Leader）。
+          当 Follower 落后超过 <code>replica.lag.time.max.ms</code>（默认 30s）即被踢出 ISR；
+          消息只有被 ISR 全部写入才视为"已提交"（committed），这决定了 <code>acks=all</code> 的真实含义。</li>
+      </ul>
+      <p>
+        Leader 故障时，Controller 从 ISR 中选举新 Leader——<strong>只有 ISR 内的副本才有资格当选</strong>，
+        因此 ISR 数量与 <code>min.insync.replicas</code> 共同构成持久化下限：
+        <code>replication.factor=3, min.insync.replicas=2</code> 表示"最多容忍 1 台 broker 宕机仍可安全写入"。
+      </p>
+
+      <h3>broker 核心配置（server.properties）</h3>
+      <pre><code># <span class="comment">Kafka broker 核心配置（server.properties）</span>
+broker.id=1
+listeners=PLAINTEXT://kafka-1:9092
+log.dirs=/data/kafka1,/data/kafka2
+
+# <span class="comment">网络与 IO 线程：万兆网络高吞吐场景的常规起点</span>
+num.network.threads=8
+num.io.threads=16
+socket.send.buffer.bytes=1048576
+socket.receive.buffer.bytes=1048576
+
+# <span class="comment">新建 topic 的默认分区数与副本数（兜底值，建 topic 时显式指定更稳）</span>
+num.partitions=6
+default.replication.factor=3
+min.insync.replicas=2
+
+# <span class="comment">数据保留：时间与大小双上限，命中任一即删除旧 segment</span>
+log.retention.hours=72
+log.retention.bytes=214748364800
+log.segment.bytes=1073741824          -- <span class="comment">segment 1GB，滚动后才能被过期清理</span>
+log.retention.check.interval.ms=300000
+
+# <span class="comment">副本拉取线程与日志压缩（用于留痕/对账类 topic）</span>
+num.replica.fetchers=4
+log.cleaner.enable=true</code></pre>
+
+      <h3>生产者可靠性：acks 与幂等</h3>
+      <p>
+        <code>acks</code> 决定"写入多少副本才算成功"：<code>0</code>（发出即忘，可能丢）、
+        <code>1</code>（Leader 写入即成功，Leader 宕机可能丢）、<code>all</code>（ISR 全部写入才成功，配合
+        <code>min.insync.replicas&ge;2</code> 可做到不丢）。配合<strong>幂等生产者</strong>
+        （<code>enable.idempotence=true</code>，broker 按 PID + 序列号去重）与<strong>有限重试</strong>，
+        可在"不丢"与"不重"之间取得工程上的最优解：
+      </p>
+      <pre><code>Properties props = new Properties();
+props.put("bootstrap.servers", "kafka-1:9092,kafka-2:9092,kafka-3:9092");
+props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+
+// <span class="comment">可靠性三件套：acks=all + 幂等 + 有限重试（单分区幂等有序）</span>
+props.put("acks", "all");
+props.put("enable.idempotence", "true");
+props.put("retries", "100");
+props.put("max.in.flight.requests.per.connection", "5");   // <span class="comment">幂等开启时 ≤5 即可保序</span>
+
+// <span class="comment">吞吐三件套：批量 + 压缩 + 攒批等待</span>
+props.put("batch.size", 131072);
+props.put("linger.ms", "20");
+props.put("compression.type", "lz4");
+props.put("buffer.memory", 67108864);
+
+// <span class="comment">跨事务幂等（如按 order_id 建补偿）由下游保证，Kafka 只保证单分区不重不丢</span>
+KafkaProducer&lt;String, String&gt; producer = new KafkaProducer&lt;&gt;(props);
+producer.send(new ProducerRecord&lt;&gt;("ods.shop.orders", orderId, payload),
+              (meta, e) -&gt; { if (e != null) e.printStackTrace(); });</code></pre>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：<code>acks=all</code> 在 ISR 收缩为 1（即只剩 Leader）时会退化成"Leader 写入即成功"。
+          生产环境务必同时设置 <code>min.insync.replicas=2</code>，让 ISR 不足时写入直接报错而不是静默降级。
+      </div>
+
+      <h3>容量规划：分区数估算公式</h3>
+      <p>
+        分区不是越多越好（更多分区意味着更多文件句柄、更久的 leader 切换与 rebalance、更大的
+        controller 元数据压力），规划的核心公式只有一个：
+      </p>
+      <pre><code>分区数 = 目标峰值吞吐 ÷ 单分区预期吞吐 × 预留系数
+
+其中：
+- 单分区生产吞吐经验值：10 MB/s（顺序写、页缓存充裕时的保守估计）
+- 预留系数：1.5 ~ 2.0（业务增长 + 大促脉冲 + 故障重放）</code></pre>
+      <p><strong>数值示例</strong>：业务库 binlog 解析后峰值 100 MB/s，规划 2 倍冗余：</p>
+      <pre><code>目标峰值吞吐 = 100 MB/s × 2 = 200 MB/s
+分区数       = 200 ÷ 10 = 20 → 向上取整到 broker 数的整数倍 → 24 个分区
+
+校验消费端：24 分区 × 每消费者并行处理 8 MB/s = 192 MB/s ≈ 达标
+校验副本流量：200 MB/s × 3 副本 = 600 MB/s 集群写入带宽
+  → 8 台 broker 均摊 75 MB/s/台，万兆网卡余量充足，千兆网卡会成为瓶颈</code></pre>
+
+      <h3>retention 策略</h3>
+      <ul>
+        <li><strong>按时间（log.retention.hours）</strong>：CDC 主干 topic 常用 24~72 小时——
+          留够"消费端宕机 + 故障排查"的时间窗，又不至于磁盘被历史数据占满。</li>
+        <li><strong>按大小（log.retention.bytes）</strong>：与时间上限叠加使用，防御流量突发把磁盘写爆。</li>
+        <li><strong>日志压缩（compact）</strong>：对"每个 key 只保留最新值"的留痕 topic（如维表快照、位点对账）
+          使用 <code>cleanup.policy=compact</code>，可无限期保留 key 的最新状态。</li>
+        <li><strong>与 Iceberg 的关系</strong>：Kafka 只是缓冲主干而非数据归档层，
+          <span class="pill">湖仓才是唯一的事实源（Source of Truth）</span>——retention 到期删除不影响数据完整性，
+          因为数据已提交至 Iceberg 快照。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>提示</strong>：磁盘需求 = 峰值吞吐 × retention 时长 × 副本数 ÷ 压缩比。
+          上例 72h 保留：100 MB/s × 259200s × 3 副本 ÷ 4（lz4）≈ 19 TB，8 台 broker 每台约 2.4 TB，
+          再留 30% 余量规划每台 3.2 TB 以上数据盘。
+      </div>
+
+      <!-- ==================== Flink CDC ==================== -->
+      <h2 id="flink-cdc">Flink CDC：无锁数据捕获</h2>
+
+      <h3>无锁快照 + binlog 原理</h3>
+      <p>
+        Flink CDC 底层复用了 Debezium 的 binlog 解析能力，但把"采集"与"计算"合并在 Flink 引擎内完成。
+        其革命性在于<strong>增量快照算法（无锁快照）</strong>，读取存量数据不再需要锁表：
+      </p>
+      <ol>
+        <li><strong>分块（Chunking）</strong>：按主键把表逻辑切分为多个 chunk（如每块 8 万行）；</li>
+        <li><strong>并发快照</strong>：多个 chunk 并行读取，读的是 MVCC 一致性视图（REPEATABLE READ），
+          不加全局锁、不阻塞业务写入；</li>
+        <li><strong>高低水位（high-low watermark）</strong>：每块快照前后各记录一次当前 binlog 位点，
+          快照结束后回放这段时间的 binlog 增量，并按 <code>op_ts</code> 与快照数据合并去重；</li>
+        <li><strong>无缝切换</strong>：全部分块完成后，source 优雅切换为纯 binlog 订阅模式，全程不断流。</li>
+      </ol>
+
+      <p>与早期 CDC 工具的对比：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>能力</th>
+            <th>Canal</th>
+            <th>Debezium（Kafka Connect）</th>
+            <th>Flink CDC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>部署形态</td>
+            <td>独立服务伪装 MySQL 从库</td>
+            <td>Kafka Connect 集群中的连接器</td>
+            <td>Flink 作业内的 source 算子</td>
+          </tr>
+          <tr>
+            <td>存量同步</td>
+            <td>需自行编写全量任务 + 锁表</td>
+            <td>需配合其他全量工具</td>
+            <td>内置增量快照，无锁、并发、断点可续</td>
+          </tr>
+          <tr>
+            <td>精确一次语义</td>
+            <td>at-least-once + 下游幂等</td>
+            <td>依赖 Connect 语义，较难保证</td>
+            <td>与 Flink checkpoint 集成，端到端可控</td>
+          </tr>
+          <tr>
+            <td>数据加工</td>
+            <td>只采集，需下游再处理</td>
+            <td>只采集，落 Kafka</td>
+            <td>采集即计算：清洗、维表 JOIN、聚合一体完成</td>
+          </tr>
+          <tr>
+            <td>运维链路</td>
+            <td>Canal + 数据总线两套</td>
+            <td>Connect + Kafka + 下游消费</td>
+            <td>一个 Flink 作业闭环</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Exactly-Once 到 Iceberg：端到端语义拆解</h3>
+      <p>
+        端到端链路 <span class="pill">MySQL → Flink CDC → Kafka → Flink → Iceberg</span> 上，
+        "精确一次"要逐段拆解，工程上有两条路线：
+      </p>
+      <ul>
+        <li><strong>路线一：两阶段提交（2PC / XA）</strong>：Kafka 事务（transactional.id +
+          <code>isolation.level=read_committed</code>）+ Flink checkpoint 两阶段提交协议 + Iceberg sink 在
+          checkpoint 时提交快照。语义最强，但吞吐受事务协调开销拖累，链路任何一环抖动都会放大延迟。</li>
+        <li><strong>路线二：at-least-once + 幂等写入（推荐）</strong>：各段允许重复投递，
+          依赖 <strong>Iceberg 的 upsert（v2 表 equality delete）或主键去重语义</strong>把重复记录在提交时合并掉。
+          吞吐高、实现简单，最终状态精确一次（effectively-once）。</li>
+      </ul>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>为什么幂等可行</strong>：CDC 流按主键（order_id）回放 upsert，同一主键写两次，
+            第二次只是覆盖/删除重放，Iceberg 快照的最终状态与"恰好一次"完全一致。
+        </div>
+        <div class="callout-warn">
+          <strong>前提</strong>：主键必须真实唯一且稳定（禁止用无业务语义的自增列跨环境同步）；
+            聚合类中间结果不能靠幂等去重，必须走回撤流（retract）语义。
+        </div>
+      </div>
+
+      <h3>断点续传与位点管理</h3>
+      <p>
+        Flink 的 <strong>checkpoint</strong> 是位点管理的载体：每次 checkpoint 把各 source 的消费位点
+        （Kafka 分区 offset / binlog 文件名+位置）连同算子状态（维表缓存、聚合中间态）一起持久化到状态后端。
+        作业故障重启后从最近一次成功的 checkpoint 恢复，数据<strong>既不丢也不重算</strong>：
+      </p>
+      <ul>
+        <li><strong>Kafka source</strong>：offset 存在 checkpoint 状态中（而非依赖 consumer group 提交），
+          <code>scan.startup.mode=group-offsets</code> 仅决定首次启动位点，之后完全由 checkpoint 接管。</li>
+        <li><strong>MySQL CDC source</strong>：binlog 位点（gtid 或 file+pos）随 chunk 进度一起写入状态，
+          增量快照的分块进度也可恢复，全量阶段崩溃重启后<strong>从断点 chunk 继续，无需重新全量</strong>。</li>
+        <li><strong>Iceberg sink</strong>：数据文件先落对象存储，快照提交与 checkpoint 对齐——
+          未确认的提交在恢复后按同名文件幂等覆盖，保证"一个 checkpoint 周期的数据恰好一次可见"。</li>
+      </ul>
+      <pre><code># <span class="comment">提交作业：开启 checkpoint、RocksDB 状态后端、保留多点恢复</span>
+$FLINK_HOME/bin/sql-client.sh \
+  -f sql/ods_orders_to_iceberg.sql \
+  -Dexecution.checkpointing.interval=60s \
+  -Dstate.backend=rocksdb \
+  -Dstate.checkpoints.dir=s3://lake/flink/ckpt/ods_orders \
+  -Dstate.checkpoints.num-retained=10 \
+  -Drestart-strategy=fixed-delay,attempts=10,delay=30s
+
+# <span class="comment">故障后从指定 checkpoint 恢复（断点续传）</span>
+$FLINK_HOME/bin/flink run -s s3://lake/flink/ckpt/ods_orders/chk-5832 ...</code></pre>
+
+      <h3>完整 Flink SQL 作业：mysql-cdc → 维表关联 → Iceberg</h3>
+      <pre><code>-- ============================================================
+-- <span class="comment">作业：shop.orders CDC 实时入湖（含维表打宽），目标 Iceberg ODS/DWD</span>
+-- ============================================================
+SET 'execution.checkpointing.interval' = '60s';
+SET 'execution.checkpointing.min-pause' = '30s';
+SET 'table.exec.sink.upsert-materialize' = 'AUTO';
+SET 'pipeline.auto-watermark-interval' = '3s';
+
+-- <span class="comment">1. 源表：MySQL CDC（增量快照无锁读取存量 + binlog 增量）</span>
+CREATE TABLE ods_orders_src (
+    order_id   BIGINT,
+    user_id    BIGINT,
+    sku_id     BIGINT,
+    amount     DECIMAL(12, 2),
+    status     TINYINT,
+    pay_time   TIMESTAMP(3),
+    proc_time  AS PROCTIME(),                          -- <span class="comment">处理时间：维表 lookup 用</span>
+    op_ts      TIMESTAMP(3) METADATA FROM 'op_ts' VIRTUAL,  -- <span class="comment">变更发生时间</span>
+    PRIMARY KEY (order_id) NOT ENFORCED
+) WITH (
+    'connector' = 'mysql-cdc',
+    'hostname' = 'mysql-master.shop.svc',
+    'port' = '3306',
+    'username' = 'flink_cdc',
+    'password' = '******',
+    'database-name' = 'shop',
+    'table-name' = 'orders',
+    'scan.incremental.snapshot.enabled' = 'true',       -- <span class="comment">无锁增量快照</span>
+    'scan.incremental.snapshot.chunk.size' = '8096',    -- <span class="comment">按主键分块，控制单块大小</span>
+    'scan.startup.mode' = 'initial',                    -- <span class="comment">存量 + 增量</span>
+    'server-time-zone' = 'Asia/Shanghai'
+);
+
+-- <span class="comment">2. 维表：商品维表 lookup JOIN（缓存 1 万行 / 60 秒）</span>
+CREATE TABLE dim_sku (
+    sku_id    BIGINT,
+    sku_name  STRING,
+    category  STRING,
+    PRIMARY KEY (sku_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:mysql://mysql-master:3306/shop',
+    'table-name' = 'sku',
+    'username' = 'flink_cdc',
+    'password' = '******',
+    'lookup.cache.max-rows' = '10000',
+    'lookup.cache.ttl' = '60s'
+);
+
+-- <span class="comment">3. 目标表：Iceberg（v2 + upsert，写入与 checkpoint 对齐提交）</span>
+CREATE TABLE dwd_orders_lake (
+    order_id   BIGINT,
+    user_id    BIGINT,
+    sku_id     BIGINT,
+    sku_name   STRING,
+    category   STRING,
+    amount     DECIMAL(12, 2),
+    status     TINYINT,
+    pay_time   TIMESTAMP(3),
+    dt         STRING,
+    PRIMARY KEY (order_id) NOT ENFORCED
+) PARTITIONED BY (dt) WITH (
+    'connector' = 'iceberg',
+    'catalog-name' = 'lakehouse',
+    'catalog-type' = 'hive',
+    'uri' = 'thrift://hive-meta:9083',
+    'warehouse' = 's3://lake/warehouse',
+    'format-version' = '2',                             -- <span class="comment">v2 支持 equality delete（upsert）</span>
+    'write.format' = 'parquet',
+    'write.upsert.enabled' = 'true',                    -- <span class="comment">主键 upsert：CDC 语义核心开关</span>
+    'write.target-file-size-bytes' = '134217728',       -- <span class="comment">目标文件 128MB，抑制小文件</span>
+    'write.metadata.metrics.default' = 'truncate(16)'   -- <span class="comment">列统计，供下游查询文件跳过</span>
+);
+
+-- <span class="comment">4. 消费写入：CDC 变更流 + 维表打宽 → 按天分区入湖</span>
+INSERT INTO dwd_orders_lake
+SELECT o.order_id, o.user_id, o.sku_id,
+       s.sku_name, s.category,
+       o.amount, o.status, o.pay_time,
+       DATE_FORMAT(o.pay_time, 'yyyy-MM-dd') AS dt
+FROM ods_orders_src AS o
+LEFT JOIN dim_sku FOR SYSTEM_TIME AS OF o.proc_time AS s
+  ON o.sku_id = s.sku_id;</code></pre>
+
+      <div class="callout-best">
+        <strong>最佳实践</strong>：checkpoint 间隔是"延迟 × 小文件 × 恢复粒度"的三角权衡——
+          60s 是 CDC 入湖的常用起点（秒级延迟需求可降到 10~30s，但必须同步加大
+          <code>write.target-file-size-bytes</code> 或引入定期 compaction，否则小文件会淹没元数据）。
+      </div>
+
+      <!-- ==================== 实时入湖链路架构 ==================== -->
+      <h2 id="pipeline">实时入湖链路架构</h2>
+
+      <h3>分层链路全景</h3>
+      <p>
+        生产级实时入湖链路的标准形态：<strong>CDC 采集层解耦业务库，Kafka 主干削峰与多播，
+        Flink 加工层承担清洗与打宽，Iceberg 以快照粒度落地</strong>。前一节的"直连"示例适合单表简单场景；
+        一旦表数量、下游消费者增多，中间的 Kafka 主干就不可或缺：
+      </p>
+
+      <div class="diagram">
+        <svg width="560" height="300" viewBox="0 0 560 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="实时入湖链路架构图">
+          <rect x="10" y="16" width="120" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="70" y="40" text-anchor="middle" fill="#ffffff" font-size="12">业务库 MySQL</text>
+          <text x="70" y="58" text-anchor="middle" fill="#ffffff" font-size="10">订单 / 用户 / 商品</text>
+          <rect x="10" y="122" width="120" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="70" y="146" text-anchor="middle" fill="#ffffff" font-size="12">Flink CDC</text>
+          <text x="70" y="164" text-anchor="middle" fill="#ffffff" font-size="10">无锁快照 + binlog</text>
+          <rect x="10" y="228" width="120" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="70" y="252" text-anchor="middle" fill="#ffffff" font-size="12">Schema Registry</text>
+          <text x="70" y="270" text-anchor="middle" fill="#ffffff" font-size="10">schema 演进协同</text>
+          <line x1="70" y1="72" x2="70" y2="122" stroke="#0f172a" stroke-width="2"></line>
+          <line x1="130" y1="150" x2="205" y2="150" stroke="#0f172a" stroke-width="2"></line>
+          <line x1="130" y1="256" x2="205" y2="256" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5,4"></line>
+          <rect x="205" y="122" width="120" height="56" rx="8" fill="#155e75"></rect>
+          <text x="265" y="146" text-anchor="middle" fill="#ffffff" font-size="12">Kafka 主干</text>
+          <text x="265" y="164" text-anchor="middle" fill="#ffffff" font-size="10">ods.shop.* 分区/副本</text>
+          <line x1="325" y1="150" x2="400" y2="150" stroke="#0f172a" stroke-width="2"></line>
+          <rect x="400" y="96" width="150" height="56" rx="8" fill="#0e7490"></rect>
+          <text x="475" y="120" text-anchor="middle" fill="#ffffff" font-size="12">Flink 消费加工</text>
+          <text x="475" y="138" text-anchor="middle" fill="#ffffff" font-size="10">清洗 / 维表 JOIN / 聚合</text>
+          <rect x="400" y="190" width="150" height="56" rx="8" fill="#0e7490"></rect>
+          <text x="475" y="214" text-anchor="middle" fill="#ffffff" font-size="12">其他订阅者</text>
+          <text x="475" y="232" text-anchor="middle" fill="#ffffff" font-size="10">审计 / 风控 / 审计旁路</text>
+          <line x1="400" y1="256" x2="325" y2="170" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5,4"></line>
+          <line x1="475" y1="96" x2="475" y2="76" stroke="#0f172a" stroke-width="2"></line>
+          <rect x="330" y="16" width="220" height="56" rx="8" fill="#14b8a6"></rect>
+          <text x="440" y="40" text-anchor="middle" fill="#ffffff" font-size="12">Iceberg 湖仓 ODS / DWD</text>
+          <text x="440" y="58" text-anchor="middle" fill="#ffffff" font-size="10">对象存储 · 快照提交 · upsert</text>
+        </svg>
+      </div>
+
+      <ul>
+        <li><strong>采集层（Flink CDC）</strong>：每库一个采集作业，按表拆分到算子并行读取，
+          统一写入 Kafka（按主键 key 分区，保证同主键变更有序）。</li>
+        <li><strong>主干层（Kafka）</strong>：以 ODS 命名规范组织 topic（如 <code>ods.shop.orders</code>），
+          72h retention 兜底故障重放；schema 演进通过 Schema Registry（Avro/Protobuf）协同。</li>
+        <li><strong>加工层（Flink 消费）</strong>：从 Kafka group-offsets 起读，完成清洗、维表 lookup JOIN、
+          轻度聚合，写入 Iceberg DWD/DWS 分区表。</li>
+        <li><strong>落地层（Iceberg）</strong>：v2 表 + upsert，快照与 checkpoint 对齐；
+          ODS 保留原始 CDC 事件（含 before/after），DWD 是合并后的最新状态——<strong>事件与状态分离</strong>，重算有据可依。</li>
+      </ul>
+
+      <h3>延迟与吞吐的权衡</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>手段</th>
+            <th>延迟收益</th>
+            <th>吞吐代价</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>缩短 checkpoint 间隔（60s → 10s）</td>
+            <td>数据可见延迟近似减半</td>
+            <td>快照提交频繁 → 小文件激增，必须配套 compaction</td>
+          </tr>
+          <tr>
+            <td>降低攒批（linger/批大小）</td>
+            <td>采集端延迟下降</td>
+            <td>Kafka 吞吐下降、broker CPU 上升</td>
+          </tr>
+          <tr>
+            <td>增大 Flink 并行度</td>
+            <td>积压时端到端延迟下降</td>
+            <td>资源成本线性上升；超过分区数后无增益</td>
+          </tr>
+          <tr>
+            <td>去掉 Kafka 直连（CDC → Iceberg）</td>
+            <td>少一跳，延迟最低</td>
+            <td>失去削峰缓冲与多订阅能力，链路耦合变高</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>乱序与回撤流处理</h3>
+      <ul>
+        <li><strong>乱序（out-of-order）</strong>：多分区消费、上游重放、网络抖动都会让事件乱序到达。
+          窗口聚合用<strong>事件时间 + Watermark</strong> 对齐：
+          <code>WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND</code>；
+          超窗的迟到数据走侧输出（side output）单独落一张"迟到事实表"，由离线任务次日修正，避免无限等窗。</li>
+        <li><strong>回撤流（retract）</strong>：CDC 更新会让下游聚合结果失效，Flink 以
+          <code>+I/-U/+U/-D</code> 变更日志语义向下游传播"撤回旧值、下发新值"。
+          目标表必须支持 upsert（Iceberg v2 equality delete / Doris Unique 表），
+          纯 append 的 sink（如 Kafka append-only topic）会因不支持回撤而报错。</li>
+        <li><strong>端到端顺序</strong>：按主键 key 写 Kafka 同分区，保证同一订单的变更序列不乱，
+          这是 upsert 幂等正确性的前提。</li>
+      </ul>
+
+      <h3>Schema Evolution：新加列的上下游协同</h3>
+      <p>上游业务库加列（如 orders 新增 <code>coupon_id</code>）时，链路各环节需按序协同：</p>
+      <ol>
+        <li><strong>业务库</strong>：执行向后兼容的 DDL——<code>ADD COLUMN coupon_id BIGINT DEFAULT NULL</code>，
+          避免直接 rename/not null 这类破坏性变更；</li>
+        <li><strong>Schema Registry</strong>：注册新 schema 版本，校验兼容性（向后兼容），
+          Kafka 消息按新 schema 写入，老消费者仍可跳过未知字段；</li>
+        <li><strong>Iceberg</strong>：同步执行 <code>ALTER TABLE ... ADD COLUMN</code>（元数据操作，秒级完成，
+          不重写数据文件）；</li>
+        <li><strong>Flink 作业</strong>：更新 SELECT 列表与目标表定义，<strong>从 savepoint 重启</strong>
+          恢复位点与状态，历史数据新列自动补 NULL；</li>
+        <li><strong>下游消费</strong>：BI/查询引擎通过 catalog 刷新感知新列，报表按需纳管。</li>
+      </ol>
+      <pre><code>-- <span class="comment">湖仓侧：加列（元数据操作，不重写文件）</span>
+ALTER TABLE lakehouse.dwd.dwd_orders
+ADD COLUMN coupon_id BIGINT AFTER amount;
+
+<span class="comment">-- Flink 作业侧：改 SELECT 后从 savepoint 原地重启，位点与状态无损迁移</span>
+<span class="comment">-- bin/flink stop --savepointPath s3://lake/flink/sp/ dwd_orders_job &amp;&amp; 重启</span></code></pre>
+      <div class="callout-warn">
+        <strong>注意</strong>：列删除、类型收窄（STRING → INT）、重命名对 CDC 链路是破坏性变更，
+          需走"新列双写 → 切读 → 删旧列"的迁移流程，切忌直接改名导致整条链路一夜故障。
+      </div>
+
+      <!-- ==================== 批式集成 ==================== -->
+      <h2 id="batch">批式集成</h2>
+      <p>
+        并非所有数据都值得上实时链路。批式通道以"定时全量/增量抽取 + 批量写湖"的方式，
+        用更低的复杂度覆盖了大部分数据源，是湖仓数据供给的基座：
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>Spark 批同步</th>
+            <th>实时 CDC 链路</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>数据时效</td>
+            <td>T+1 / 小时级</td>
+            <td>分钟级 ~ 秒级</td>
+          </tr>
+          <tr>
+            <td>数据形态</td>
+            <td>快照（某时刻全量状态）</td>
+            <td>变更流（upsert 最新状态 + 事件留痕）</td>
+          </tr>
+          <tr>
+            <td>复杂转换</td>
+            <td><strong>擅长</strong>：重 JOIN、回刷、重算历史分区</td>
+            <td>只做轻量清洗打宽，复杂逻辑易致状态膨胀</td>
+          </tr>
+          <tr>
+            <td>故障恢复</td>
+            <td>失败重跑整个分区即可，语义简单</td>
+            <td>依赖 checkpoint/savepoint，运维门槛高</td>
+          </tr>
+          <tr>
+            <td>资源成本</td>
+            <td>按时启停，弹性低成本</td>
+            <td>常驻资源 + Kafka + 状态存储</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>维表快照、低时效报表、历史回刷、对账修正</td>
+            <td>实时大屏、风控、监控告警类消费</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>DataX / Sqoop 的定位</h3>
+      <ul>
+        <li><strong>DataX</strong>：阿里开源的离线异构数据同步工具，插件化支持 MySQL/Oracle ↔
+          HDFS/各类 RDBMS，单机多线程跑批，适合<strong>中小规模、无 Spark 集群</strong>团队的定点同步。
+          定位是"数据库 ↔ 数据库/文件"的点对点搬运工，不承担计算。</li>
+        <li><strong>Sqoop</strong>：Hadoop 时代的 RDBMS ↔ HDFS/Hive 批量导入工具（基于 MapReduce），
+          已停止社区演进，新项目建议用 Spark JDBC / Flink JDBC 批模式 / DataX 替代。</li>
+        <li><strong>选型口径</strong>：湖仓体系内优先 Spark 批作业（与计算层同栈、可直接写 Iceberg、
+          支持复杂转换）；异构库到库的小规模搬运可用 DataX 补位。</li>
+      </ul>
+      <pre><code>-- <span class="comment">Spark 批同步：每日快照写 Iceberg 天分区（overwrite 指定分区，幂等重跑）</span>
+spark-sql \
+  --conf spark.sql.sources.partitionOverwriteMode=dynamic \
+  -e "
+INSERT OVERWRITE lake.ods.sku_snapshot PARTITION (dt = '2026-11-04')
+SELECT sku_id, sku_name, category, price
+FROM jdbc_src.sku
+WHERE updated_at &gt;= '2026-11-03';"</code></pre>
+
+      <!-- ==================== 容量规划方法 ==================== -->
+      <h2 id="capacity">容量规划方法</h2>
+      <p>
+        容量规划是把"业务流量"翻译成"中间件与集群资源"的系统方法，四步闭环：
+      </p>
+      <h3>步骤一：采集峰值流量</h3>
+      <p>
+        从业务库监控取 binlog 生成速率的 P99 峰值（而非平均值），并统计表数量与单表大小，
+        得到入口流量画像。示例采集结论：<span class="pill">平均 15 MB/s，大促峰值 60 MB/s，4 张核心大表</span>。
+      </p>
+      <h3>步骤二：确定预留倍数</h3>
+      <p>
+        在峰值之上再预留增长与缓冲：<span class="tag">×3</span> 是常见工程系数
+        （1 倍当前峰值 + 1 倍年度增长 + 1 倍故障重放/回溯）。
+        本例目标吞吐 = 60 MB/s × 3 = <strong>180 MB/s</strong>。
+      </p>
+      <h3>步骤三：反推分区与资源</h3>
+      <pre><code>Kafka 分区数  = 180 ÷ 10（单分区 10 MB/s）= 18 → 取 24（broker 数整数倍）
+Kafka 副本带宽 = 180 × 3 = 540 MB/s（集群口径），8 broker 均摊 67.5 MB/s → 万兆达标
+Kafka 磁盘    = 180 MB/s × 72h × 3 副本 ÷ 4(lz4) ≈ 33 TB → 每台 4.2 TB × 1.3 余量 ≈ 5.5 TB
+
+Flink source 并行度 = 24（= 分区数，再大无增益）
+Flink 处理能力      = 每 parallelism 6 MB/s → 24 × 6 = 144 MB/s
+                     <span class="comment">-- 若需扛满 180 MB/s，并行度提到 32（Kafka 分区同步扩）</span>
+Flink 资源          = 每 parallelism 1 core + 2 GB 堆 → 约 32 core / 64 GB（含 JM 冗余）
+
+Iceberg 小文件     = 60s checkpoint × 32 并行度 ≈ 每分钟 32~64 个文件
+                     → 每日 4.6~9.2 万文件 → 必须规划每小时 compaction 作业</code></pre>
+      <h3>步骤四：压测验证</h3>
+      <ol>
+        <li><strong>Kafka</strong>：<code>kafka-producer-perf-test</code> 以 180 MB/s 打流 1 小时，
+          观察 broker 延迟（request latency）与 ISR 稳定性；</li>
+        <li><strong>端到端</strong>：录制真实 binlog 回放至 2 倍峰值，观察 Flink 反压（backpressure）、
+          checkpoint 时长（应 &lt; 间隔的 1/3，即 &lt; 20s）与 consumer lag 是否归零；</li>
+        <li><strong>落地</strong>：检查 Iceberg 提交延迟、manifest 数量与查询引擎的文件跳过效率，
+          确认 compaction 节奏跟得上；</li>
+        <li><strong>留档</strong>：把压测结论固化为容量基线，每季度或大促前复测。</li>
+      </ol>
+      <div class="callout-best">
+        <strong>最佳实践</strong>：容量规划的核心输出不是一张配置表，而是
+          "流量指标 → 资源水位"的换算关系（如 10 MB/s/分区、6 MB/s/parallelism），
+          流量翻倍时按关系式线性扩容即可，避免每次都从零推演。
+      </div>
+
+      <!-- ==================== 适用边界 ==================== -->
+      <h2 id="boundary">适用边界</h2>
+
+      <h3>何时直接 CDC 入湖，而非经 Kafka</h3>
+      <ul>
+        <li><strong>表少且下游单一</strong>：只有 3~5 张表、唯一消费方就是湖仓 ODS 时，
+          Flink CDC 直写 Iceberg 少一跳，延迟更低、成本更小，Kafka 主干的价值（多订阅/重放）无从体现。</li>
+        <li><strong>延迟极度敏感</strong>：秒级可见的监控类指标，多一跳 Kafka（攒批 + 消费拉取）
+          会引入不可控的排队延迟，直连链路更可控。</li>
+        <li><strong>团队无 Kafka 运维能力</strong>：小团队维护一套分布式消息系统的成本
+          （分区规划、ISR 告警、磁盘水位）可能高于其收益。</li>
+      </ul>
+      <div class="grid-2">
+        <div class="callout">
+          <strong>经 Kafka 的判断信号</strong>：下游 ≥ 2 类消费者、需要保留重放窗口、
+            多团队按需订阅、未来可能新增风控/审计旁路——出现任意一条，Kafka 主干的投入就开始回本。
+        </div>
+        <div class="callout-warn">
+          <strong>直连的代价</strong>：失去削峰缓冲（上游脉冲直接冲击 Flink）、
+            消费逻辑变更只能靠 savepoint 而无法重放历史、采集与加工耦合（改加工逻辑要动采集作业）。
+        </div>
+      </div>
+
+      <h3>何时不该上实时链路</h3>
+      <ul>
+        <li><strong>时效没有消费方</strong>：报表次日更新即可满足业务，实时化只产出成本不产出价值——
+          <span class="tag">先有实时消费场景，再有实时链路</span>，顺序不可颠倒。</li>
+        <li><strong>上游是"批量重算"型</strong>：数据每天全量修正、频繁回刷历史，
+          CDC 的行级增量反而放大写入量；这类源用批式快照更干净。</li>
+        <li><strong>逻辑重而变更轻</strong>：变更量不大但每次都要多表复杂 JOIN 与重算，
+          实时链路的状态与回撤处理会让作业脆弱难维护，交给离线批更稳。</li>
+        <li><strong>质量要求人工把关</strong>：财务对账类数据需要人工审核后发布，
+          强行实时化会绕过审核节点，制造合规风险。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>总结</strong>：数据集成层的准绳——<strong>Kafka 为实时主干、Flink CDC 为采集与加工引擎、
+          Iceberg 为唯一事实源</strong>；批式与实时两条通道按消费时效分工而非互相替代；
+          每一段链路都先问"谁消费、要什么时效、能容忍什么语义"，再决定引入什么组件。
+          "为了实时而实时"是湖仓集成层最常见也最昂贵的反模式。
+      </div>
+
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

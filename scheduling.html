@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>调度与资源层 - 数据湖仓一体教程</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ============ 顶部导航（全站统一，结构勿改；当前页由 js 自动加 .active） ============ -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="index.html" class="logo">湖仓学院 Lakehouse</a>
+      <nav id="site-nav" class="site-nav">
+        <a href="index.html">首页</a>
+        <a href="architecture.html">总体架构</a>
+        <a href="storage.html">存储层</a>
+        <a href="compute.html">计算层</a>
+        <a href="query.html">查询层</a>
+        <a href="integration.html">数据集成</a>
+        <a href="scheduling.html">调度资源</a>
+        <a href="observability.html">可观测</a>
+        <a href="governance.html">数据治理</a>
+        <a href="optimization.html">性能调优</a>
+        <a href="scenarios.html">场景实战</a>
+        <a href="career.html">岗位进阶</a>
+      </nav>
+      <!-- 移动端汉堡按钮（<=1024px 显示，点击展开导航面板） -->
+      <button id="nav-toggle" class="nav-toggle" aria-label="菜单">☰</button>
+    </div>
+  </header>
+
+  <!-- ============ 主体区：左侧“本页导航”目录 + 右侧正文内容 ============ -->
+  <div class="container layout">
+
+    <!-- 本页导航目录（sticky 侧栏） -->
+    <aside class="toc">
+      <p class="toc-title">本页导航</p>
+      <a href="#intro">本层定位</a>
+      <a href="#ds">Apache DolphinScheduler</a>
+      <a href="#yarn">Apache YARN</a>
+      <a href="#isolation">资源隔离落地</a>
+      <a href="#bridge">调度与湖仓的衔接</a>
+      <a href="#tuning">调优要点</a>
+      <a href="#boundary">适用边界</a>
+    </aside>
+
+    <!-- 正文内容区 -->
+    <main class="content">
+
+      <h1 id="intro">调度与资源层</h1>
+      <div class="page-intro">
+        本页讲解湖仓一体架构中的调度与资源管理层：Apache DolphinScheduler 负责"作业何时跑、按什么顺序跑"，Apache YARN 负责"作业分到多少 CPU 与内存、在哪个节点跑"。学完本页，你将能够独立设计湖仓批流作业的 DAG 编排与 YARN 队列隔离方案，并掌握 Compaction 调度化、数据就绪驱动等湖仓特有的调度实践。
+      </div>
+
+      <div class="arch-layer">调度编排层：DolphinScheduler（何时跑 / 按什么依赖顺序跑）</div>
+      <div class="arch-layer">资源管理层：Apache YARN（分多少资源 / 在哪些节点跑）</div>
+      <div class="arch-layer">计算层：Spark / Flink / Trino</div>
+      <div class="arch-layer">存储层：对象存储 / HDFS + 开放表格式（Iceberg / Hudi / Delta）</div>
+
+      <p>调度与资源是两条互补的问题域：<strong>DolphinScheduler 解决"时间维度"</strong>——按 cron 定时或依赖事件触发工作流，管理任务依赖、补数、重试与告警；<strong>YARN 解决"空间维度"</strong>——把集群 CPU 与内存抽象为队列与 Container，在多租户之间做配额、隔离与弹性共享。二者协同的典型链路是：DolphinScheduler 在约定时刻把 Spark/Flink 作业提交到 YARN 的指定队列，YARN 按队列容量与优先级分配 Container，作业失败由 DolphinScheduler 感知并按策略重试、告警。</p>
+
+      <div class="callout">
+        <strong>分工记忆法</strong>：作业"迟到"（没按时跑起来）先查调度层——cron 表达式、依赖阻塞、Worker 容量；作业"饿死"（提交后长时间 PENDING）先查资源层——队列容量、配额、抢占策略。
+      </div>
+
+      <div class="diagram">
+        <svg width="700" height="330" viewBox="0 0 700 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="调度与资源层协同链路示意图">
+          <defs>
+            <marker id="arr1" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#0f766e"></path>
+            </marker>
+          </defs>
+          <rect x="10" y="12" width="200" height="46" rx="8" fill="#f0fdfa" stroke="#0f766e"></rect>
+          <text x="110" y="31" text-anchor="middle" font-size="13" fill="#0f766e">Web UI / REST 客户端</text>
+          <text x="110" y="48" text-anchor="middle" font-size="11" fill="#64748b">工作流编排 · 租户与项目管理</text>
+          <rect x="250" y="12" width="200" height="46" rx="8" fill="#0f766e"></rect>
+          <text x="350" y="31" text-anchor="middle" font-size="13" fill="#ffffff">ApiServer</text>
+          <text x="350" y="48" text-anchor="middle" font-size="11" fill="#ccfbf1">统一入口 · 鉴权 · 元数据存储</text>
+          <rect x="490" y="12" width="200" height="46" rx="8" fill="#14b8a6"></rect>
+          <text x="590" y="31" text-anchor="middle" font-size="13" fill="#ffffff">AlertServer</text>
+          <text x="590" y="48" text-anchor="middle" font-size="11" fill="#ecfeff">邮件 · 钉钉 · 企微告警分发</text>
+          <rect x="10" y="100" width="200" height="52" rx="8" fill="#f0fdfa" stroke="#0f766e"></rect>
+          <text x="110" y="121" text-anchor="middle" font-size="13" fill="#0f766e">MySQL / PostgreSQL</text>
+          <text x="110" y="139" text-anchor="middle" font-size="11" fill="#64748b">工作流定义与运行实例元数据</text>
+          <rect x="250" y="100" width="200" height="52" rx="8" fill="#0f766e"></rect>
+          <text x="350" y="121" text-anchor="middle" font-size="13" fill="#ffffff">MasterServer（active/standby）</text>
+          <text x="350" y="139" text-anchor="middle" font-size="11" fill="#ccfbf1">DAG 切分 · 状态机驱动 · 分发命令</text>
+          <rect x="490" y="100" width="200" height="52" rx="8" fill="#f0fdfa" stroke="#0f766e"></rect>
+          <text x="590" y="121" text-anchor="middle" font-size="13" fill="#0f766e">ZooKeeper</text>
+          <text x="590" y="139" text-anchor="middle" font-size="11" fill="#64748b">选主 · 容错 · 任务事件监听</text>
+          <rect x="10" y="196" width="205" height="52" rx="8" fill="#14b8a6"></rect>
+          <text x="112" y="217" text-anchor="middle" font-size="13" fill="#ffffff">WorkerServer（分组 A）</text>
+          <text x="112" y="235" text-anchor="middle" font-size="11" fill="#ecfeff">批处理任务执行</text>
+          <rect x="247" y="196" width="205" height="52" rx="8" fill="#14b8a6"></rect>
+          <text x="350" y="217" text-anchor="middle" font-size="13" fill="#ffffff">WorkerServer（分组 B）</text>
+          <text x="350" y="235" text-anchor="middle" font-size="11" fill="#ecfeff">流处理任务执行</text>
+          <rect x="484" y="196" width="206" height="52" rx="8" fill="#14b8a6"></rect>
+          <text x="587" y="217" text-anchor="middle" font-size="13" fill="#ffffff">WorkerServer（分组 C）</text>
+          <text x="587" y="235" text-anchor="middle" font-size="11" fill="#ecfeff">维护类任务执行</text>
+          <rect x="10" y="284" width="680" height="42" rx="8" fill="#0f766e"></rect>
+          <text x="350" y="310" text-anchor="middle" font-size="13" fill="#ffffff">作业提交 → YARN 队列（realtime / offline / default）→ Container 分配执行</text>
+          <line x1="212" y1="35" x2="246" y2="35" stroke="#0f766e" stroke-width="2" marker-end="url(#arr1)"></line>
+          <line x1="350" y1="60" x2="350" y2="96" stroke="#0f766e" stroke-width="2" marker-end="url(#arr1)"></line>
+          <line x1="350" y1="154" x2="350" y2="192" stroke="#0f766e" stroke-width="2" marker-end="url(#arr1)"></line>
+          <line x1="452" y1="126" x2="486" y2="126" stroke="#0f766e" stroke-width="2" marker-end="url(#arr1)"></line>
+          <line x1="252" y1="126" x2="216" y2="126" stroke="#0f766e" stroke-width="2" marker-end="url(#arr1)"></line>
+          <line x1="350" y1="250" x2="350" y2="280" stroke="#0f766e" stroke-width="2" marker-end="url(#arr1)"></line>
+        </svg>
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="ds">Apache DolphinScheduler</h2>
+
+      <p>DolphinScheduler（下称 DS）是 Apache 顶级开源的分布式可视化 DAG 工作流调度系统，以"去中心化 Master 集群 + Worker 分组"支撑高可用与水平扩展，是国产湖仓/数仓场景中使用最广泛的调度器之一。相对于 Crontab、Azkaban、Airflow，DS 的优势集中在：<span class="pill">DAG 可视化编排</span> <span class="pill">补数</span> <span class="pill">多租户</span> <span class="pill">Worker 分组</span> 四个生产刚需上。</p>
+
+      <h3>1. 服务架构</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>组件</th>
+            <th>角色定位</th>
+            <th>关键职责</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MasterServer</td>
+            <td>调度核心（可多实例 HA）</td>
+            <td>把工作流定义切分为任务实例、驱动状态机流转、向 Worker 分发执行命令；通过 ZooKeeper 选主与容错</td>
+          </tr>
+          <tr>
+            <td>WorkerServer</td>
+            <td>任务执行器（按分组横向扩展）</td>
+            <td>在执行线程池中运行 Shell / SQL / Spark / Flink / MR 等任务，回写状态与日志</td>
+          </tr>
+          <tr>
+            <td>AlertServer</td>
+            <td>告警服务</td>
+            <td>消费告警事件，分发到邮件、钉钉、企微、飞书、Webhook 等告警渠道</td>
+          </tr>
+          <tr>
+            <td>ApiServer</td>
+            <td>REST API 与 Web UI 后端</td>
+            <td>工作流定义、项目与租户管理、任务实例查询，元数据落库（MySQL / PostgreSQL）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>部署要点</strong>：Master 建议至少 2 个实例 + ZooKeeper 集群实现热备；Worker 按"分组"部署（如 batch 组、stream 组、ops 组），任务定义时指定分组即可实现执行侧隔离；元数据库务必配置定时备份——工作流定义全部在此，是 DS 的"命根子"。
+      </div>
+
+      <h3>2. DAG 编排核心概念</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>概念</th>
+            <th>含义</th>
+            <th>湖仓场景用法</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>任务依赖</td>
+            <td>同一工作流内上下游任务形成 DAG；上游成功才触发下游</td>
+            <td>清洗 → 聚合 → Compaction → 质量校验的依赖链；跨工作流用 DEPENDENT 任务节点引用上游实例</td>
+          </tr>
+          <tr>
+            <td>补数（补历史数据）</td>
+            <td>指定起止日期区间回跑工作流，时间参数按区间逐日替换，支持串行/并行与并行度</td>
+            <td>上游数据回刷后按区间重跑 30 天分区；并行度 = 4 时同时回补 4 天</td>
+          </tr>
+          <tr>
+            <td>多租户</td>
+            <td>租户绑定 Linux 用户（或 K8s 命名空间），任务以该身份在 Worker 执行</td>
+            <td>不同团队作业以各自系统账号运行，实现 HDFS / Hive 权限与审计隔离</td>
+          </tr>
+          <tr>
+            <td>Worker 分组</td>
+            <td>Worker 注册时声明分组，任务只能路由到指定分组</td>
+            <td>重型 Spark 批任务固定到 batch 组（大内存机器），就绪探测等轻任务走 ops 组</td>
+          </tr>
+          <tr>
+            <td>定时与依赖组合</td>
+            <td>cron 定时触发 + 工作流内依赖 + 跨工作流 DEPENDENT</td>
+            <td>凌晨批次"cron 兜底 + 上游实例依赖"双保险，避免上游延迟导致脏跑</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>3. 湖仓任务定义要点</h3>
+      <p>DS 提供多种任务类型，湖仓链路中最常用的是 <span class="pill">SHELL</span>、<span class="pill">SQL</span>、<span class="pill">SPARK</span>、<span class="pill">FLINK</span> 四种。无论哪种类型，都应遵守两条规范：时间一律用内置参数（如 <code>$[yyyy-MM-dd]</code>）而非硬编码，保证补数可回放；任务必须幂等（Iceberg/Hudi 表按主键或分区覆盖写），保证重试安全。</p>
+
+      <p><strong>SHELL 任务——封装 spark-submit（常用于带复杂参数的批作业）：</strong></p>
+      <pre><code>#!/bin/bash
+<span class="comment"># DS SHELL 任务：Spark 清洗作业（ODS -&gt; DWD），日期由 DS 参数替换</span>
+set -euo pipefail
+
+dt="$[yyyy-MM-dd]"        <span class="comment"># 内置时间参数：补数时按区间逐日替换</span>
+
+spark-submit \
+  --master yarn \
+  --deploy-mode cluster \
+  --queue lakehouse_offline \
+  --name "dwd_orders_clean_${dt}" \
+  --conf spark.sql.adaptive.enabled=true \
+  --conf spark.sql.shuffle.partitions=800 \
+  --num-executors 20 \
+  --executor-cores 4 \
+  --executor-memory 8g \
+  --class com.lakehouse.job.DwdOrdersClean \
+  hdfs:///lakehouse/jobs/dwd-orders-clean-1.0.0.jar \
+  --date "${dt}"</code></pre>
+
+      <p><strong>SQL 任务——SparkSQL 数据源（适合声明式的分区覆盖写）：</strong></p>
+      <pre><code><span class="comment">-- DS SQL 任务（SparkSQL 类型）：DWD -&gt; DWS 日聚合</span>
+SET spark.sql.adaptive.enabled = true;
+SET spark.sql.adaptive.coalescePartitions.enabled = true;
+
+INSERT OVERWRITE lakehouse.dws_orders_day
+PARTITION (dt = '$[yyyy-MM-dd]')
+SELECT user_id,
+       count(*)          AS order_cnt,
+       sum(order_amount) AS order_amt
+FROM   lakehouse.dwd_orders
+WHERE  dt = '$[yyyy-MM-dd]'
+GROUP BY user_id;</code></pre>
+
+      <p><strong>FLINK 任务——流作业常驻提交：</strong></p>
+      <pre><code><span class="comment"># DS FLINK 任务类型核心参数（等价于如下 flink run 命令）</span>
+flink run \
+  -m yarn-cluster \
+  -yqu lakehouse_realtime \
+  -yjm 2048 -ytm 4096 -ys 2 \
+  -yD metrics.reporter.prom.factory.class=org.apache.flink.metrics.prometheus.PrometheusReporterFactory \
+  -c com.lakehouse.stream.BinlogToIceberg \
+  hdfs:///lakehouse/jobs/binlog-to-iceberg-1.0.0.jar \
+  --kafka-topic ods_binlog --iceberg-table lakehouse.ods_orders</code></pre>
+
+      <p><strong>SQL 任务——JDBC 数据源（质量校验最常用）：</strong></p>
+      <pre><code><span class="comment">-- DS SQL 任务（MySQL / JDBC 类型）：把质量校验规则做成"违规明细查询"</span>
+<span class="comment">-- 规则 1：当日分区行数不得低于昨日分区的 50%（同比波动）</span>
+<span class="comment">-- 规则 2：主键重复率不得超过 0.1%</span>
+SELECT 'partition_cnt_drop' AS broken_rule, '$[yyyy-MM-dd]' AS dt
+FROM   qc.dws_orders_cnt
+WHERE  dt = '$[yyyy-MM-dd]' AND cnt &lt; threshold * 0.5
+UNION ALL
+SELECT 'pk_duplicate', '$[yyyy-MM-dd]'
+FROM   qc.dws_orders_dup
+WHERE  dt = '$[yyyy-MM-dd]' AND dup_rate &gt; 0.001;
+<span class="comment">-- 结果写入 qc 违规明细表后，由下游 SHELL 任务统计行数：</span>
+<span class="comment">-- 违规行数 &gt; 0 则 exit 1，把工作流标记失败并阻断指标产出</span></code></pre>
+
+      <p><strong>DEPENDENT 任务——上游工作流实例依赖（跨链路就绪保障）：</strong></p>
+      <pre><code><span class="comment"># 就绪探测 SHELL：上游分区到位才放行下游清洗（DS 内置于依赖节点后）</span>
+#!/bin/bash
+set -euo pipefail
+dt="$[yyyy-MM-dd]"
+
+for i in $(seq 1 60); do
+  <span class="comment"># 检查上游 HDFS 分区的 _SUCCESS 标记（binlog 入湖作业完成时写入）</span>
+  if hdfs dfs -test -e "/warehouse/ods_orders/dt=${dt}/_SUCCESS"; then
+    files=$(hdfs dfs -count "/warehouse/ods_orders/dt=${dt}" | awk '{print $2}')
+    <span class="comment"># 分区文件数大于 0 视为就绪，退出码 0 放行下游任务</span>
+    [ "${files}" -gt 0 ] &amp;&amp; exit 0
+  fi
+  sleep 60
+done
+echo "上游分区 dt=${dt} 超过 60 分钟未就绪" &gt;&amp;2
+exit 1    <span class="comment"># 非零退出码触发 DS 失败重试 / 告警</span></code></pre>
+
+      <h3>4. 定时 cron 与依赖的组合策略</h3>
+      <p>DS 使用 Quartz 6 域 cron 表达式（<strong>秒 分 时 日 月 周</strong>），示例：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>表达式</th>
+            <th>含义</th>
+            <th>典型用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>0 0 2 * * ?</code></td>
+            <td>每日 02:00:00</td>
+            <td>凌晨批次启动</td>
+          </tr>
+          <tr>
+            <td><code>0 30 2 * * ?</code></td>
+            <td>每日 02:30:00</td>
+            <td>错峰启动第二个批次</td>
+          </tr>
+          <tr>
+            <td><code>0 0/30 * * * ?</code></td>
+            <td>每 30 分钟一次</td>
+            <td>准实时任务探测</td>
+          </tr>
+          <tr>
+            <td><code>0 0 0/2 * * ?</code></td>
+            <td>每 2 小时整点</td>
+            <td>小时级增量入湖</td>
+          </tr>
+          <tr>
+            <td><code>0 0 3 ? * MON-FRI</code></td>
+            <td>工作日 03:00</td>
+            <td>工作日报表前序</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>三种触发组合的取舍：<strong>纯时间驱动</strong>最简单，但上游延迟时下游空跑或脏跑；<strong>时间 + 工作流内依赖</strong>保证链内顺序，是最常用的日批模式；<strong>时间 + 跨工作流 DEPENDENT + 就绪探测</strong>最稳，上游未就绪时任务阻塞等待而非错误运行。</p>
+
+      <h3>5. 失败重试与告警策略</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>配置层级</th>
+            <th>配置项</th>
+            <th>推荐值</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>任务级</td>
+            <td>失败重试次数</td>
+            <td>2 ~ 3</td>
+            <td>覆盖网络抖动、JM 重启等瞬时故障</td>
+          </tr>
+          <tr>
+            <td>任务级</td>
+            <td>失败重试间隔</td>
+            <td>10 分钟</td>
+            <td>避免立刻重试撞上同一个未恢复的故障</td>
+          </tr>
+          <tr>
+            <td>任务级</td>
+            <td>超时告警 / 失败</td>
+            <td>时长 = 历史 P95 × 1.5</td>
+            <td>卡死任务及早暴露，超时可选择仅告警或直接杀掉</td>
+          </tr>
+          <tr>
+            <td>工作流级</td>
+            <td>失败策略</td>
+            <td>关键链路"结束"；旁路任务"继续"</td>
+            <td>指标刷新等旁路任务失败不应阻塞主链路</td>
+          </tr>
+          <tr>
+            <td>告警</td>
+            <td>发送策略</td>
+            <td>仅失败时告警</td>
+            <td>成功也告警会造成告警疲劳</td>
+          </tr>
+          <tr>
+            <td>告警</td>
+            <td>渠道分级</td>
+            <td>钉钉/企微（即时）+ 邮件（留档）</td>
+            <td>核心链路失败升级电话值班</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout-best">
+        <strong>最佳实践</strong>：把"失败重试"视为应对瞬时故障的机制，而不是应对数据问题的机制。重试前先看日志：语法错误、数据倾斜类失败重试 100 次也不会成功，徒增集群负载。
+      </div>
+
+      <h3>6. 湖仓场景典型 DAG</h3>
+      <p>以电商湖仓的日批次为例，完整链路为：<strong>数据就绪探测 → 清洗 → 聚合 → Compaction → 质量校验 → 指标产出</strong>。DAG 中的每一环都安排了错峰时刻，避免峰值资源叠加：</p>
+
+      <div class="diagram">
+        <svg width="700" height="220" viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="湖仓日批次典型 DAG 示意图">
+          <defs>
+            <marker id="arr2" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#0f766e"></path>
+            </marker>
+          </defs>
+          <rect x="10" y="15" width="200" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="110" y="38" text-anchor="middle" font-size="13" fill="#ffffff">① 数据就绪探测</text>
+          <text x="110" y="57" text-anchor="middle" font-size="11" fill="#ccfbf1">02:00 · _SUCCESS / 分区探测</text>
+          <rect x="250" y="15" width="200" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="350" y="38" text-anchor="middle" font-size="13" fill="#ffffff">② ODS → DWD 清洗</text>
+          <text x="350" y="57" text-anchor="middle" font-size="11" fill="#ccfbf1">02:10 · Spark · offline 队列</text>
+          <rect x="490" y="15" width="200" height="56" rx="8" fill="#0f766e"></rect>
+          <text x="590" y="38" text-anchor="middle" font-size="13" fill="#ffffff">③ DWD → DWS 聚合</text>
+          <text x="590" y="57" text-anchor="middle" font-size="11" fill="#ccfbf1">02:50 · SparkSQL · offline 队列</text>
+          <rect x="10" y="125" width="200" height="56" rx="8" fill="#14b8a6"></rect>
+          <text x="110" y="148" text-anchor="middle" font-size="13" fill="#ffffff">④ Iceberg Compaction</text>
+          <text x="110" y="167" text-anchor="middle" font-size="11" fill="#ecfeff">04:30 · 小文件合并 + 快照过期</text>
+          <rect x="250" y="125" width="200" height="56" rx="8" fill="#14b8a6"></rect>
+          <text x="350" y="148" text-anchor="middle" font-size="13" fill="#ffffff">⑤ 数据质量校验</text>
+          <text x="350" y="167" text-anchor="middle" font-size="11" fill="#ecfeff">05:10 · 行数/主键/空值规则</text>
+          <rect x="490" y="125" width="200" height="56" rx="8" fill="#14b8a6"></rect>
+          <text x="590" y="148" text-anchor="middle" font-size="13" fill="#ffffff">⑥ 指标产出 / 通知</text>
+          <text x="590" y="167" text-anchor="middle" font-size="11" fill="#ecfeff">05:30 · 报表刷新 · 告知下游</text>
+          <line x1="212" y1="43" x2="246" y2="43" stroke="#0f766e" stroke-width="2" marker-end="url(#arr2)"></line>
+          <line x1="452" y1="43" x2="486" y2="43" stroke="#0f766e" stroke-width="2" marker-end="url(#arr2)"></line>
+          <path d="M590,71 L590,98 L110,98 L110,121" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#arr2)"></path>
+          <line x1="212" y1="153" x2="246" y2="153" stroke="#0f766e" stroke-width="2" marker-end="url(#arr2)"></line>
+          <line x1="452" y1="153" x2="486" y2="153" stroke="#0f766e" stroke-width="2" marker-end="url(#arr2)"></line>
+        </svg>
+      </div>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：质量校验节点必须放在 Compaction 之后、指标产出之前，且"校验失败即阻断"——否则带病数据会被下游报表放大。校验规则至少覆盖：分区行数同比波动、主键重复数、关键列空值率。
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="yarn">Apache YARN</h2>
+
+      <p>YARN（Yet Another Resource Negotiator）是 Hadoop 生态的资源管理中枢。湖仓集群中 Spark、Flink、Hive/Tez 等计算引擎都以 Client/AM 模式向 YARN 申请资源，因此<strong>队列设计与容量规划直接决定了多引擎、多租户能否和平共处</strong>。</p>
+
+      <h3>1. 核心架构</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>角色</th>
+            <th>定位</th>
+            <th>关键职责</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ResourceManager（RM）</td>
+            <td>全局唯一（可 HA）</td>
+            <td>接收作业提交，按调度器（Capacity / Fair）把资源分配给队列与应用；内含 Scheduler 与 ApplicationsManager</td>
+          </tr>
+          <tr>
+            <td>NodeManager（NM）</td>
+            <td>每节点一个</td>
+            <td>周期性汇报节点可用资源，负责 Container 的启停、监控与日志聚合</td>
+          </tr>
+          <tr>
+            <td>ApplicationMaster（AM）</td>
+            <td>每个应用一个</td>
+            <td>代表应用向 RM 申请 Container、命令 NM 启动任务、监控作业进度与容错</td>
+          </tr>
+          <tr>
+            <td>Container</td>
+            <td>资源抽象单位</td>
+            <td>封装一段固定额度（vcores + memory）与优先级的资源，是调度与隔离的最小单元</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="diagram">
+        <svg width="700" height="300" viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="YARN 架构示意图">
+          <defs>
+            <marker id="arr3" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L8,3 L0,6 Z" fill="#0f766e"></path>
+            </marker>
+          </defs>
+          <rect x="10" y="12" width="680" height="46" rx="8" fill="#0f766e"></rect>
+          <text x="350" y="31" text-anchor="middle" font-size="14" fill="#ffffff">ResourceManager（全局调度器）</text>
+          <text x="350" y="49" text-anchor="middle" font-size="11" fill="#ccfbf1">CapacityScheduler 队列分配 · ApplicationsManager 管理 AM 生命周期</text>
+          <rect x="10" y="90" width="320" height="48" rx="8" fill="#14b8a6"></rect>
+          <text x="170" y="110" text-anchor="middle" font-size="13" fill="#ffffff">ApplicationMaster（每个应用一个）</text>
+          <text x="170" y="128" text-anchor="middle" font-size="11" fill="#ecfeff">申请 Container · 监控作业 · 失败重试</text>
+          <rect x="350" y="90" width="340" height="48" rx="8" fill="#f0fdfa" stroke="#0f766e"></rect>
+          <text x="520" y="110" text-anchor="middle" font-size="13" fill="#0f766e">队列树 root / { realtime, offline, default }</text>
+          <text x="520" y="128" text-anchor="middle" font-size="11" fill="#64748b">capacity 配额 · maximum-capacity 弹性 · ACL 提交权限</text>
+          <rect x="10" y="170" width="215" height="88" rx="8" fill="#0f766e"></rect>
+          <text x="117" y="190" text-anchor="middle" font-size="13" fill="#ffffff">NodeManager · node-01</text>
+          <rect x="22" y="205" width="90" height="40" rx="5" fill="#14b8a6"></rect>
+          <text x="67" y="229" text-anchor="middle" font-size="11" fill="#ffffff">Container</text>
+          <rect x="124" y="205" width="90" height="40" rx="5" fill="#14b8a6"></rect>
+          <text x="169" y="229" text-anchor="middle" font-size="11" fill="#ffffff">Container</text>
+          <rect x="242" y="170" width="215" height="88" rx="8" fill="#0f766e"></rect>
+          <text x="349" y="190" text-anchor="middle" font-size="13" fill="#ffffff">NodeManager · node-02</text>
+          <rect x="254" y="205" width="90" height="40" rx="5" fill="#14b8a6"></rect>
+          <text x="299" y="229" text-anchor="middle" font-size="11" fill="#ffffff">Container</text>
+          <rect x="356" y="205" width="90" height="40" rx="5" fill="#14b8a6"></rect>
+          <text x="401" y="229" text-anchor="middle" font-size="11" fill="#ffffff">Container</text>
+          <rect x="474" y="170" width="216" height="88" rx="8" fill="#0f766e"></rect>
+          <text x="582" y="190" text-anchor="middle" font-size="13" fill="#ffffff">NodeManager · node-03</text>
+          <rect x="486" y="205" width="90" height="40" rx="5" fill="#14b8a6"></rect>
+          <text x="531" y="229" text-anchor="middle" font-size="11" fill="#ffffff">Container</text>
+          <rect x="588" y="205" width="90" height="40" rx="5" fill="#14b8a6"></rect>
+          <text x="633" y="229" text-anchor="middle" font-size="11" fill="#ffffff">Container</text>
+          <line x1="110" y1="60" x2="110" y2="86" stroke="#0f766e" stroke-width="2" marker-end="url(#arr3)"></line>
+          <line x1="520" y1="60" x2="520" y2="86" stroke="#0f766e" stroke-width="2" marker-end="url(#arr3)"></line>
+          <path d="M110,140 L110,166" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#arr3)"></path>
+          <path d="M170,140 L300,166" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#arr3)"></path>
+          <path d="M230,140 L560,166" fill="none" stroke="#0f766e" stroke-width="2" marker-end="url(#arr3)"></path>
+        </svg>
+      </div>
+
+      <h3>2. 队列模型与资源隔离：capacity-scheduler.xml</h3>
+      <p>湖仓集群的典型队列划分是"<strong>实时流队列 + 离线批队列 + 兜底队列</strong>"。以下配置将集群切分为三个一级队列：<code>realtime</code>（Flink 常驻流作业，高保障）、<code>offline</code>（Spark/Hive 离线批，弹性最大）、<code>default</code>（临时查询与开发调试兜底）：</p>
+
+      <pre><code>&lt;configuration&gt;
+
+  <span class="comment">&lt;!-- 一级队列：实时流 / 离线批 / 兜底，capacity 之和必须为 100 --&gt;</span>
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.queues&lt;/name&gt;
+    &lt;value&gt;realtime,offline,default&lt;/value&gt;
+  &lt;/property&gt;
+
+  <span class="comment">&lt;!-- ========== realtime：Flink 常驻流作业，高保障队列 ========== --&gt;</span>
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.realtime.capacity&lt;/name&gt;
+    &lt;value&gt;30&lt;/value&gt;
+    <span class="comment">&lt;!-- 正常时段最低保障 30% 集群资源 --&gt;</span>
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.realtime.maximum-capacity&lt;/name&gt;
+    &lt;value&gt;50&lt;/value&gt;
+    <span class="comment">&lt;!-- 空闲时最多借用至 50%，防止单队列吃满集群 --&gt;</span>
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.realtime.acl_submit_applications&lt;/name&gt;
+    &lt;value&gt;flink,rt_user&lt;/value&gt;
+    <span class="comment">&lt;!-- 仅允许流平台账号提交，防止批任务挤占 --&gt;</span>
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.realtime.acl_administer_queue&lt;/name&gt;
+    &lt;value&gt;yarn,flink&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    <span class="comment">&lt;!-- 实时队列中的作业不允许被抢占（关键作业保障） --&gt;</span>
+    &lt;name&gt;yarn.scheduler.capacity.root.realtime.disable_preemption&lt;/name&gt;
+    &lt;value&gt;true&lt;/value&gt;
+  &lt;/property&gt;
+
+  <span class="comment">&lt;!-- ========== offline：Spark / Hive 离线批，弹性最大 ========== --&gt;</span>
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.offline.capacity&lt;/name&gt;
+    &lt;value&gt;60&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.offline.maximum-capacity&lt;/name&gt;
+    &lt;value&gt;80&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.offline.user-limit-factor&lt;/name&gt;
+    &lt;value&gt;2&lt;/value&gt;
+    <span class="comment">&lt;!-- 单用户最多占用队列容量的 2 倍（借用弹性时） --&gt;</span>
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.offline.acl_submit_applications&lt;/name&gt;
+    &lt;value&gt;spark,batch_user&lt;/value&gt;
+  &lt;/property&gt;
+
+  <span class="comment">&lt;!-- ========== default：临时查询与开发调试兜底 ========== --&gt;</span>
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.default.capacity&lt;/name&gt;
+    &lt;value&gt;10&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.root.default.maximum-capacity&lt;/name&gt;
+    &lt;value&gt;30&lt;/value&gt;
+    <span class="comment">&lt;!-- 限制临时队列的毛刺，避免挤占关键链路 --&gt;</span>
+  &lt;/property&gt;
+
+  <span class="comment">&lt;!-- ========== 全局调度行为 ========== --&gt;</span>
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.maximum-applications&lt;/name&gt;
+    &lt;value&gt;10000&lt;/value&gt;
+    <span class="comment">&lt;!-- 集群并发应用上限，防止小任务风暴拖垮 RM --&gt;</span>
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.maximum-am-resource-percent&lt;/name&gt;
+    &lt;value&gt;0.1&lt;/value&gt;
+    <span class="comment">&lt;!-- AM 最多占用 10% 资源，给 Task Container 留余量 --&gt;</span>
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;yarn.scheduler.capacity.node-locality-delay&lt;/name&gt;
+    &lt;value&gt;40&lt;/value&gt;
+    <span class="comment">&lt;!-- 放弃节点本地性调度前等待的心跳轮数 --&gt;</span>
+  &lt;/property&gt;
+&lt;/configuration&gt;</code></pre>
+
+      <div class="callout">
+        <strong>参数语义速记</strong>：<code>capacity</code> 是"保底"（队列随时可用的份额，同级之和恒为 100），<code>maximum-capacity</code> 是"上限"（借空闲资源时不得超过的弹性天花板），<code>user-limit-factor</code> 限制单用户的借用倍数，ACL 则从入口上禁止越队提交。
+      </div>
+
+      <h3>3. 标签调度：节点级物理隔离</h3>
+      <p>队列隔离是"逻辑配额"，仍共享同一批节点；当实时流作业对延迟极度敏感（不希望与重批任务争抢磁盘/网络）时，用 <strong>Node Label</strong> 把集群划分为物理分组，让 Flink 作业独占高配机器：</p>
+
+      <pre><code><span class="comment"># 1) yarn-site.xml：开启节点标签（RM 侧）</span>
+&lt;property&gt;
+  &lt;name&gt;yarn.node-labels.enabled&lt;/name&gt;
+  &lt;value&gt;true&lt;/value&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.node-labels.fs-store.root-dir&lt;/name&gt;
+  &lt;value&gt;hdfs:///yarn/node-labels&lt;/value&gt;
+&lt;/property&gt;
+
+<span class="comment"># 2) 创建标签并绑定节点（无需重启集群）</span>
+yarn rmadmin -addToClusterNodeLabels "realtime,offline"
+yarn rmadmin -replaceLabelsOnNode \
+  "node-01.foo.com=realtime,node-02.foo.com=realtime,node-11.foo.com=offline,node-12.foo.com=offline"
+
+<span class="comment"># 3) capacity-scheduler.xml：把标签授权给队列</span>
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.realtime.accessible-node-labels&lt;/name&gt;
+  &lt;value&gt;realtime&lt;/value&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.realtime.accessible-node-labels.realtime.capacity&lt;/name&gt;
+  &lt;value&gt;100&lt;/value&gt;
+  <span class="comment">&lt;!-- realtime 队列独占 realtime 标签节点 100% 容量 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.offline.accessible-node-labels&lt;/name&gt;
+  &lt;value&gt;offline&lt;/value&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.root.offline.accessible-node-labels.offline.capacity&lt;/name&gt;
+  &lt;value&gt;100&lt;/value&gt;
+&lt;/property&gt;</code></pre>
+
+      <div class="callout-warn">
+        <strong>注意</strong>：启用标签后，"默认分区"（无标签节点）的各队列容量配置仍然生效且总和必须为 100；每个标签分区内的容量按该分区的百分比独立计算。作业只需提交到对应队列，无需修改业务代码。
+      </div>
+
+      <h3>4. 核心容量参数规划公式</h3>
+      <pre><code><span class="comment"># ---------- 节点与集群容量 ----------</span>
+单节点可分配内存 = 物理内存 × 0.75 − OS / 监控 Agent 预留（通常 4 ~ 8GB）
+单节点可分配 vcores = 物理核数（超线程开启且 CPU 不敏感时可放宽至 1.5 倍）
+集群总容量 = Σ 各节点可分配资源
+
+<span class="comment"># ---------- 队列配额 ----------</span>
+队列 capacity（保底）   = 队列高峰稳态需求 ÷ 集群总容量 × 100
+队列 maximum-capacity = 历史峰值毛刺需求 ÷ 集群总容量 × 100 + 20% 弹性缓冲
+
+<span class="comment"># ---------- Container 规格 ----------</span>
+单 Container 内存 = 执行器 JVM 堆 × (1 + 10% ~ 15% 堆外 overhead)
+memory : vcore 经验比 = 4GB ~ 8GB : 1（重 shuffle 批作业取高值）
+
+<span class="comment"># ---------- 校验 ----------</span>
+稳态并发 Container 总内存 ≤ offline 队列 capacity × 集群总内存（保底可满足）
+高峰并发 Container 总内存 ≤ offline 队列 maximum-capacity × 集群总内存（弹性可消化）</code></pre>
+
+      <!-- ================================================== -->
+      <h2 id="isolation">资源隔离落地</h2>
+
+      <p>队列隔离、标签隔离、K8s 混合部署是湖仓生产环境三种主流的资源隔离方案，隔离强度与成本依次递增：</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h3>队列隔离</h3>
+          <p><span class="tag">逻辑配额</span> 同一集群内以 capacity 队列切分配额，靠 ACL 与 maximum-capacity 控制弹性，零改造成本，是中小规模湖仓的首选。</p>
+        </div>
+        <div class="card">
+          <h3>标签隔离</h3>
+          <p><span class="tag">物理节点</span> Node Label 把节点划分成组，实时作业独占标签节点，彻底避免与批任务争抢磁盘与网络，适合延迟敏感的流批混跑集群。</p>
+        </div>
+        <div class="card">
+          <h3>K8s 混合部署</h3>
+          <p><span class="tag">容器化</span> 批流作业统一上 K8s，用 Namespace + ResourceQuota + Yunikorn/Volcano 做调度，弹性伸缩最佳，但要求作业容器化改造能力。</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>队列隔离</th>
+            <th>标签隔离</th>
+            <th>K8s 混合部署</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>隔离层级</td>
+            <td>逻辑配额（共享全部节点）</td>
+            <td>物理节点分组（独占机器）</td>
+            <td>容器 / Pod（独占内核命名空间）</td>
+          </tr>
+          <tr>
+            <td>资源保障程度</td>
+            <td>中：保底容量 + 可被高优队列抢占</td>
+            <td>高：标签节点上的资源完全独占</td>
+            <td>高：Quota 限制 + 优先级抢占</td>
+          </tr>
+          <tr>
+            <td>弹性共享</td>
+            <td>好：队列间可借用空闲资源</td>
+            <td>中：仅标签内借用</td>
+            <td>好：节点池统一调度 + HPA 弹性</td>
+          </tr>
+          <tr>
+            <td>改造成本</td>
+            <td>低：只改提交参数与调度器配置</td>
+            <td>低~中：配置标签并规划节点分组</td>
+            <td>高：作业镜像化、日志与监控重建</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>中小规模、批流可共存</td>
+            <td>流作业延迟敏感、硬件异构</td>
+            <td>云原生湖仓、多引擎统一平台</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="grid-2">
+        <div class="callout">
+          <strong>逻辑隔离家族（队列）</strong>：所有作业共享全部节点，靠 capacity 配额 + ACL 划分份额。优点是资源利用率最高——空闲队列的容量可被繁忙队列借用；代价是隔离仅停留在"配额"层面，IO 与网络争抢依然存在。
+        </div>
+        <div class="callout">
+          <strong>物理隔离家族（标签 / K8s）</strong>：实时与离线作业在物理节点或容器层面分而治之，隔离强度高、故障域清晰；代价是牺牲弹性共享，需要为每个分组预留容量余量，机器利用率低于逻辑隔离方案。
+        </div>
+      </div>
+
+      <h3>关键作业保障：抢占配置</h3>
+      <p>当高保障队列（如 realtime）被低保障队列占用了保底容量时，YARN 抢占机制会先向被抢占队列发出通知（SIGTERM），超过宽限期后强制回收（SIGKILL）。核心配置：</p>
+
+      <pre><code><span class="comment">&lt;!-- 全局开启抢占（capacity-scheduler.xml） --&gt;</span>
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.preemption.enabled&lt;/name&gt;
+  &lt;value&gt;true&lt;/value&gt;
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.preemption.monitor_interval&lt;/name&gt;
+  &lt;value&gt;15s&lt;/value&gt;
+  <span class="comment">&lt;!-- 抢占监测周期 --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.preemption.max_wait_before_kill&lt;/name&gt;
+  &lt;value&gt;15000&lt;/value&gt;
+  <span class="comment">&lt;!-- 被抢占 Container 收到通知后的自行退出宽限期（ms） --&gt;</span>
+&lt;/property&gt;
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.preemption.total_preemption_per_round&lt;/name&gt;
+  &lt;value&gt;0.2&lt;/value&gt;
+  <span class="comment">&lt;!-- 每轮最多回收全集群 20% 资源，避免"抢占风暴" --&gt;</span>
+&lt;/property&gt;
+
+<span class="comment">&lt;!-- 队列级开关：&lt;queue-path&gt; 替换为实际队列路径 --&gt;</span>
+&lt;property&gt;
+  &lt;name&gt;yarn.scheduler.capacity.&lt;queue-path&gt;.disable_preemption&lt;/name&gt;
+  &lt;value&gt;false&lt;/value&gt;
+  <span class="comment">&lt;!-- false = 本队列允许被高保障队列抢占；关键队列（如 realtime）设 true 免被抢 --&gt;</span>
+&lt;/property&gt;</code></pre>
+
+      <div class="grid-2">
+        <div class="callout-best">
+          <strong>抢占实践</strong>：只让"关键队列免抢 + 离线队列可被抢"单向生效；抢占宽限期给足 15 秒以上，让 Spark/Flink 收到停止信号后完成日志落盘；每次扩容或改配后用一次压测验证抢占路径真实可用。
+        </div>
+        <div class="callout-warn">
+          <strong>风险提示</strong>：流作业被抢占会导致 Checkpoint 中断甚至状态回退，凡是带状态的常驻作业所在队列都应设置 <code>disable_preemption=true</code>；同时避免两个关键队列互相抢占形成"乒乓"，抢占只作为最后防线，日常靠容量规划避免触达。
+        </div>
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="bridge">调度与湖仓的衔接</h2>
+
+      <p>湖仓一体引入开放表格式后，<strong>表的维护作业（Compaction、快照过期、Manifest 合并）必须像业务作业一样被调度化、被监控</strong>——它们不跑，表的读写性能就会慢性劣化。这正是调度层与存储层的衔接点。</p>
+
+      <h3>1. Compaction 作业调度化</h3>
+      <p>以 Iceberg 为例，三个维护性存储过程建议固定在日批次末尾执行（凌晨低峰）：</p>
+
+      <pre><code><span class="comment">-- 1) 合并小数据文件：binpack 策略，目标 512MB / 文件</span>
+CALL lakehouse.system.rewrite_data_files(
+  table    =&gt; 'lakehouse.dws_orders_day',
+  strategy =&gt; 'binpack',
+  options  =&gt; map('target-file-size-bytes', '536870912')
+);
+
+<span class="comment">-- 2) 合并 manifest 元数据文件，降低查询计划阶段的扫描量</span>
+CALL lakehouse.system.rewrite_manifests(
+  table =&gt; 'lakehouse.dws_orders_day'
+);
+
+<span class="comment">-- 3) 过期快照：保留最近 7 天与最后 100 个快照</span>
+<span class="comment">--    $[yyyy-MM-dd-7] 为 DS 内置时间参数，自动替换为 7 天前日期</span>
+CALL lakehouse.system.expire_snapshots(
+  table       =&gt; 'lakehouse.dws_orders_day',
+  older_than  =&gt; TIMESTAMP '$[yyyy-MM-dd-7] 00:00:00',
+  retain_last =&gt; 100
+);</code></pre>
+
+      <p>在 DolphinScheduler 中落地为 SHELL 任务（便于参数化与失败告警），接入日批次 DAG：</p>
+
+      <pre><code>#!/bin/bash
+<span class="comment"># DS SHELL 任务：Iceberg 表维护（快照过期 + 小文件合并）</span>
+set -euo pipefail
+
+TABLE="lakehouse.dws_orders_day"
+EXPIRE_DT="$[yyyy-MM-dd-7]"       <span class="comment"># 保留 7 天快照</span>
+
+spark-sql \
+  --master yarn \
+  --queue lakehouse_offline \
+  --name "iceberg_maintain_${TABLE}" \
+  --num-executors 10 \
+  --executor-cores 4 \
+  --executor-memory 8g \
+  --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
+  --conf spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog \
+  --conf spark.sql.catalog.lakehouse.type=hive \
+  -e "CALL lakehouse.system.expire_snapshots(table =&gt; '${TABLE}', older_than =&gt; TIMESTAMP '${EXPIRE_DT} 00:00:00', retain_last =&gt; 100); \
+      CALL lakehouse.system.rewrite_data_files(table =&gt; '${TABLE}', strategy =&gt; 'binpack');"</code></pre>
+
+      <div class="callout">
+        <strong>Hudi 的对应做法</strong>：Hudi 表常以 <code>schedule_compact</code> + <code>run_compaction</code> 两个步骤调度（0.12+ 也支持内联自动合并），Delta 则用 <code>OPTIMIZE table_name</code> 与 <code>VACUUM</code> 两条 SQL——思路一致：把存储过程当成"受调度管理的一等公民作业"。
+      </div>
+
+      <h3>2. 数据就绪：事件驱动 vs 纯时间驱动</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>时间驱动（cron）</th>
+            <th>事件驱动（就绪触发）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>触发方式</td>
+            <td>固定时刻无条件触发</td>
+            <td>上游完成事件 / <code>_SUCCESS</code> 标记 / 分区探测</td>
+          </tr>
+          <tr>
+            <td>上游晚到</td>
+            <td>空跑或脏跑，需事后补数</td>
+            <td>自动顺延，数据到即处理</td>
+          </tr>
+          <tr>
+            <td>链路延迟</td>
+            <td>调度间隔即延迟下限</td>
+            <td>接近理论最小延迟</td>
+          </tr>
+          <tr>
+            <td>可预测性</td>
+            <td>高，便于运维排班</td>
+            <td>低，负载毛刺时刻不可控</td>
+          </tr>
+          <tr>
+            <td>实现复杂度</td>
+            <td>低，一条 cron 即可</td>
+            <td>中：需事件总线或探测任务兜底</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>稳定日批、报表链路</td>
+            <td>上游到达时间波动大的多源依赖链</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="grid-2">
+        <div class="callout-best">
+          <strong>推荐混合模式</strong>：cron 兜底 + 就绪探测前置任务。凌晨 02:00 启动探测任务，最长等待 60 分钟；上游提前到达则立即放行（拿到更低延迟），超时则失败告警人工介入（保住可预测性）。
+        </div>
+        <div class="callout-warn">
+          <strong>纯事件驱动的坑</strong>：事件丢失（Kafka 消费异常）或乱序（多分区到达顺序不一）会造成下游静默等待。设计上必须保证探测/事件消费幂等，并为"事件超时未到"配置显式告警，而不是无限等待。
+        </div>
+      </div>
+
+      <!-- ================================================== -->
+      <h2 id="tuning">调优要点</h2>
+
+      <h3>1. 作业错峰</h3>
+      <p>凌晨批次的失败大头不是代码，而是"峰值叠加"——多个大任务同一分钟提交，队列瞬间打满。错峰排布示例：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>时刻</th>
+            <th>作业</th>
+            <th>队列</th>
+            <th>峰值申请</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>02:00</td>
+            <td>上游同步 + 就绪探测</td>
+            <td>realtime / ops</td>
+            <td>小（探测类）</td>
+          </tr>
+          <tr>
+            <td>02:10</td>
+            <td>ODS → DWD 清洗</td>
+            <td>offline</td>
+            <td>200 vcore / 1.2TB</td>
+          </tr>
+          <tr>
+            <td>02:50</td>
+            <td>DWD → DWS 聚合</td>
+            <td>offline</td>
+            <td>400 vcore / 2.4TB</td>
+          </tr>
+          <tr>
+            <td>04:30</td>
+            <td>Compaction / 快照过期</td>
+            <td>offline</td>
+            <td>100 vcore / 800GB</td>
+          </tr>
+          <tr>
+            <td>05:30</td>
+            <td>质量校验 + 指标产出</td>
+            <td>offline</td>
+            <td>小（校验类）</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>经验法则：<strong>同一时刻并行任务的峰值申请之和，不应超过 offline 队列 maximum-capacity 对应容量的 80%</strong>，剩余 20% 留给重试与临时查询。</p>
+
+      <h3>2. 大任务拆分</h3>
+      <ul>
+        <li>触发条件：单任务时长超过 1 小时、或申请超过 200 executor、或处理超过一个月的全量分区——三条中满足任意一条即拆。</li>
+        <li>按分区拆分最常见：DS 中为每个分区生成并发任务实例（传参 <code>${p_date}</code>），补数并行度即分区数；主键哈希分片适合无天然分区的表。</li>
+        <li>拆分后收益：失败重试粒度从"整任务"降到"单分片"，单点数据倾斜的影响面也被隔离。</li>
+      </ul>
+
+      <h3>3. Worker 容量</h3>
+      <pre><code><span class="comment"># DS 3.x application.yaml 关键字段（不同版本命名略有差异，以部署文档为准）</span>
+worker:
+  exec-threads: 100          <span class="comment"># Worker 并发处理命令的线程数</span>
+  exec-task-num: 20          <span class="comment"># 单 Worker 同时执行任务数上限</span>
+  heartbeat-interval: 10s    <span class="comment"># 心跳周期，Master 依此判定存活</span></code></pre>
+      <pre><code><span class="comment"># Worker 容量经验公式</span>
+安全并发任务数 = floor((Worker 物理内存 − 4GB 预留) ÷ 单任务客户端峰值内存)
+示例：64GB Worker，spark-submit 客户端峰值约 2GB → 并发 ≤ 30，exec-task-num 取 24 留 20% 余量
+过载信号：DS 任务"提交成功但长时间无日志输出"、Worker 端任务队列等待时间 &gt; 2 × 任务历史 P50 时长</code></pre>
+
+      <h3>4. YARN 内存与 vcore 比例</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>负载类型</th>
+            <th>memory : vcore</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Spark 重 shuffle 批处理</td>
+            <td>6 ~ 8GB : 1</td>
+            <td>排序、聚合、内存压缩开销大，vcore 给多也跑不动</td>
+          </tr>
+          <tr>
+            <td>Spark 常规批 / Hive</td>
+            <td>4 ~ 6GB : 1</td>
+            <td>湖仓日批的主力负载</td>
+          </tr>
+          <tr>
+            <td>Flink 流作业</td>
+            <td>2 ~ 4GB : 1</td>
+            <td>RocksDB 状态走堆外，CPU 密集度低于批任务</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>两个高频坑：<strong>其一</strong>，忘记 <code>spark.executor.memoryOverhead</code>（默认仅 executor 堆的 10%），堆外溢出导致 Container 被 YARN 杀掉（exit code 143 / 137），湖仓作业跑 Parquet 压缩时尤甚，建议显式调到 15%；<strong>其二</strong>，Container 粒度过小（如 1GB）会让集群碎片化、调度效率下降，粒度过大则排队变长，用上面的比例表对齐后不要频繁改动。</p>
+
+      <!-- ================================================== -->
+      <h2 id="boundary">适用边界</h2>
+
+      <h3>1. 小规模团队需要 DolphinScheduler 吗？</h3>
+      <p>先回答三个问题：每日作业是否少于 20 个？链路是否单链无分叉？是否没有补数与多租户诉求？如果三个都是"是"，那么 <code>crontab</code> + 依赖探测脚本（或单机 Airflow）完全够用，引入 DS 反而背上"ZooKeeper + 元数据库 + 三类服务进程"的运维成本。</p>
+      <p>出现以下<strong>任意两条</strong>，就值得上 DS：</p>
+      <ul>
+        <li>作业规模超过 50 个/日，人工排 cron 已经排不开错峰；</li>
+        <li>链路分叉多、跨团队依赖多，需要可视化的 DAG 评审与血缘；</li>
+        <li>有明确的补数（历史区间回跑）需求；</li>
+        <li>多团队共用集群，需要多租户隔离与操作审计；</li>
+        <li>要求调度平台自身 HA（crontab 是单点，机器故障即停摆）。</li>
+      </ul>
+
+      <h3>2. 什么时候不适合标签调度？</h3>
+      <ul>
+        <li><strong>节点数少且同构</strong>：10 节点以下的小集群再切标签，每个分组的容量都很薄，一次节点故障就可能击穿标签分组的承载能力；</li>
+        <li><strong>集群常年高利用率</strong>（如整体大于 85%）：独占节点意味着牺牲弹性共享，物理隔离的代价超过收益，此时靠队列 + 抢占更划算；</li>
+        <li><strong>标签维度组合过多</strong>（机房 × 业务 × 优先级）：标签组合爆炸会让容量碎片化、排障路径变长，标签维度建议不超过两个；</li>
+        <li><strong>已整体上 K8s</strong>：统一调度器（Yunikorn / Volcano）+ Namespace/Quota 天然提供更强的隔离与弹性，再保留 YARN 标签属于双轨冗余。</li>
+      </ul>
+
+      <div class="callout-warn">
+        <strong>反模式提醒</strong>：不要为了隔离而隔离。见过不少团队在 5 台机器的测试集群上配置 3 层队列 + 2 组标签 + 抢占，结果每天在"配额调参"上花的时间比开发还多。隔离方案应与集群规模、SLA 要求同阶演进。
+      </div>
+
+      <div class="callout-best">
+        <strong>演进路径建议</strong>：起步用"队列隔离 + ACL"即可；当流作业延迟被批任务干扰时引入"标签隔离"把流作业独立到专属节点；当集群规模与团队规模到了需要秒级弹性时，再评估"K8s 混合部署"。每一步都由明确的痛点驱动，而非技术追新。
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ 页脚（全站统一） ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>数据湖仓一体教程 · 存储与计算底座学习手册 · 纯静态站点</p>
+    </div>
+  </footer>
+
+  <!-- 返回顶部按钮（滚动超过 400px 自动出现） -->
+  <button id="btn-top" class="btn-top" aria-label="返回顶部">↑</button>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
